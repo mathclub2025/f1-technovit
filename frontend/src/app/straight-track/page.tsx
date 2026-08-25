@@ -1,51 +1,57 @@
 "use client";
 
 import React from "react";
+
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { StraightTrack } from "@/components/race/straight-track";
 import { LiveLeaderboard } from "@/components/race/live-leaderboard";
 import { TelemetryBar } from "@/components/race/telemetry-bar";
-import { useRaceStore } from "@/lib/race-store";
+import { useRaceStore, TOTAL_LAPS } from "@/lib/race-store";
+import { RaceCountdown } from "@/components/race/race-countdown";
 
 export default function StraightTrackPage() {
-  const {
-    currentRound,
-    status,
-    getLiveStats,
-  } = useRaceStore();
+  const { currentRound, status, getLiveStats } = useRaceStore();
 
   const stats = getLiveStats();
 
   const leader = stats[0] || null;
   const secondPlace = stats[1] || null;
 
-  const currentLap =
-    leader?.currentLap ||
-    Math.min(50, (currentRound - 1) * 5 + 1);
+  const currentLap = leader?.currentLap || 1;
 
   const elapsedTotalSeconds = leader?.cumulativeTime || 0;
 
-  const fastestRoundTeam = stats.reduce((best, team) => {
-    if (!team.bestRoundTime) return best;
-    if (!best || !best.bestRoundTime) return team;
-    return team.bestRoundTime < best.bestRoundTime ? team : best;
-  }, null as (typeof stats)[number] | null);
+  const fastestRoundTeamId =
+    stats.length > 0
+      ? [...stats].sort(
+          (a, b) => a.currentRoundTime - b.currentRoundTime
+        )[0]?.teamId
+      : null;
+
+  const bestEverRoundTime =
+    stats.length > 0
+      ? Math.min(...stats.map((team) => team.currentRoundTime))
+      : null;
 
   return (
     <DashboardShell>
-      <div className="w-full space-y-4">
+      <RaceCountdown active={status === "INPUT"} />
+      <div className="w-full max-w-[1800px] mx-auto space-y-4">
 
+        {/* TOP TELEMETRY */}
         <TelemetryBar
           currentLap={currentLap}
-          totalLaps={50}
+          totalLaps={TOTAL_LAPS}
           leader={leader}
           secondPlace={secondPlace}
           elapsedTotalSeconds={elapsedTotalSeconds}
         />
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+        {/* RACE AREA */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 min-h-[600px]">
 
-          <div className="min-h-[600px]">
+          {/* TRACK */}
+          <div className="min-w-0">
             <StraightTrack
               stats={stats}
               currentRound={currentRound}
@@ -53,12 +59,13 @@ export default function StraightTrackPage() {
             />
           </div>
 
-          <div className="min-h-[600px]">
+          {/* LIVE TIMING */}
+          <div className="min-h-[500px]">
             <LiveLeaderboard
               stats={stats}
               currentRound={currentRound}
-              fastestRoundTeamId={fastestRoundTeam?.teamId}
-              bestEverRoundTime={fastestRoundTeam?.bestRoundTime}
+              fastestRoundTeamId={fastestRoundTeamId}
+              bestEverRoundTime={bestEverRoundTime}
             />
           </div>
 
@@ -67,4 +74,5 @@ export default function StraightTrackPage() {
       </div>
     </DashboardShell>
   );
+  
 }
