@@ -134,56 +134,7 @@ def save_strategy(
             admin_override
         )
     )
-def save_lap_result(
-    team_id,
-    lap_id,
-    lap_time,
-    cumulative_time,
-    position,
-    compound=None,
-    tire_age=None,
-    pit_stop=0,
-    pit_penalty=0,
-):
-    return execute(
-        """
-        INSERT INTO lap_results
-        (
-            team_id,
-            lap_id,
-            lap_time,
-            cumulative_time,
-            position,
-            compound,
-            tire_age,
-            pit_stop,
-            pit_penalty,
-            status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')
-        ON CONFLICT(team_id, lap_id)
-        DO UPDATE SET
-            lap_time = excluded.lap_time,
-            cumulative_time = excluded.cumulative_time,
-            position = excluded.position,
-            compound = excluded.compound,
-            tire_age = excluded.tire_age,
-            pit_stop = excluded.pit_stop,
-            pit_penalty = excluded.pit_penalty,
-            status = excluded.status
-        """,
-        (
-            team_id,
-            lap_id,
-            lap_time,
-            cumulative_time,
-            position,
-            compound,
-            tire_age,
-            pit_stop,
-            pit_penalty,
-        )
-    )
+
 def save_lap_result(
     team_id,
     lap_id,
