@@ -194,12 +194,44 @@ class TeamRegistration(BaseModel):
     members: list[TeamMember]
 
 
-# -----------------------------------------------------------------------------
-# REST Endpoints
-# -----------------------------------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "F1-Technovit Race API", "status": "running"}
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        database.database.init_race_schema(1, 50, 10)
+        # Pre-seed default cars in memory
+        db_teams = database.queries.get_teams()
+        raw_teams = [
+            {
+                "team_id": str(t.get("name", f"team_{t.get('id')}")).lower().replace(" ", "_"),
+                "driver": t.get("name", f"Team {t.get('id')}"),
+                "compound": Compound.MEDIUM
+            }
+            for t in db_teams
+        ] if db_teams and len(db_teams) > 0 else _default_teams()
+
+        for item in raw_teams:
+            t_id = str(item.get("team_id") or item.get("id"))
+            driver = item.get("driver") or item.get("driverName") or ""
+            cars[t_id] = Car(
+                team_id=t_id,
+                driver=driver,
+                compound=Compound.MEDIUM,
+                tire_age=0,
+                total_race_time=0.0,
+                last_lap_time=0.0,
+                action=ActionType.STAY_OUT,
+                pit_stop_count=0,
+                status="TRACK",
+                has_submitted=False,
+                has_used_power=False,
+            )
+            database.database.get_or_create_team(t_id, driver)
+    except Exception as e:
+        print(f"Startup initialization note: {e}")
 
 @app.post("/api/register")
 async def register_team(payload: TeamRegistration):

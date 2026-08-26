@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
 from fastapi import Header, HTTPException, WebSocket, WebSocketException, status, Query, Depends
-from jose import JWTError, jwt
+try:
+    import jwt
+    JWTError = getattr(jwt, "PyJWTError", Exception)
+except ImportError:
+    from jose import JWTError, jwt
 from models import TokenPayload
 
 SECRET = os.getenv("SHARED_JWT_SECRET", "technovit_f1_shared_jwt_secret_key_2026")
