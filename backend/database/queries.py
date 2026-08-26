@@ -50,3 +50,13 @@ def get_race():
         FROM races
         ORDER BY id
     """)
+def register_team_member(team_id, name, email, registration_no):
+    return execute("""
+        INSERT INTO team_members (
+            team_id,
+            name,
+            email,
+            registration_no
+        )
+        VALUES (?, ?, ?, ?)
+    """, (team_id, name, email, registration_no))
