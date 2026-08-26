@@ -1,50 +1,99 @@
+import os
 import sqlite3
 from pathlib import Path
+from dotenv import load_dotenv
 
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "race.db"
 
 
+def is_postgres():
+    return bool(DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")))
+
+
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-if __name__ == "__main__":
-    conn = get_connection()
-    print("Connected to:", DB_PATH)
-    print("Database connection successful!")
-    conn.close()
+    if is_postgres():
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+
+def _format_query(query: str) -> str:
+    if is_postgres():
+        # Convert SQLite ? placeholders to PostgreSQL %s
+        return query.replace("?", "%s")
+    return query
+
+
 def fetch_all(query, params=()):
     conn = get_connection()
+    formatted = _format_query(query)
     try:
-        cursor = conn.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+        if is_postgres():
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(formatted, params)
+                return [dict(row) for row in cursor.fetchall()]
+        else:
+            cursor = conn.execute(formatted, params)
+            return [dict(row) for row in cursor.fetchall()]
     finally:
         conn.close()
 
 
 def fetch_one(query, params=()):
     conn = get_connection()
+    formatted = _format_query(query)
     try:
-        cursor = conn.execute(query, params)
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        if is_postgres():
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(formatted, params)
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        else:
+            cursor = conn.execute(formatted, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
     finally:
         conn.close()
 
 
-def execute(query, params=()):
+def execute(query, params=(), return_id=False):
     conn = get_connection()
+    formatted = _format_query(query)
     try:
-        cursor = conn.execute(query, params)
-        conn.commit()
-        return cursor.lastrowid
+        if is_postgres():
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(formatted, params)
+                last_id = None
+                if return_id:
+                    try:
+                        row = cursor.fetchone()
+                        last_id = row["id"] if row and "id" in row else None
+                    except Exception:
+                        pass
+                conn.commit()
+                return last_id
+        else:
+            cursor = conn.execute(formatted, params)
+            conn.commit()
+            return cursor.lastrowid
     finally:
         conn.close()
+
+
 def get_standings():
-    conn = get_connection()
-
     query = """
     SELECT
         t.id AS team_id,
@@ -72,15 +121,10 @@ def get_standings():
         COALESCE(lr.position, 999999),
         tc.total_race_time ASC;
     """
+    return fetch_all(query)
 
-    rows = conn.execute(query).fetchall()
 
-    standings = [dict(row) for row in rows]
-
-    conn.close()
-
-    return standings
-def get_race(race_id):
+def get_race(race_id=1):
     return fetch_one(
         """
         SELECT
@@ -98,6 +142,8 @@ def get_race(race_id):
         """,
         (race_id,)
     )
+
+
 def save_strategy(
     team_id,
     block_id,
@@ -106,8 +152,7 @@ def save_strategy(
     new_compound=None,
     admin_override=0
 ):
-    return execute(
-        """
+    query = """
         INSERT INTO strategy_submissions
         (
             team_id,
@@ -120,20 +165,13 @@ def save_strategy(
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(team_id, block_id)
         DO UPDATE SET
-            action = excluded.action,
-            pit_lap = excluded.pit_lap,
-            new_compound = excluded.new_compound,
-            admin_override = excluded.admin_override
-        """,
-        (
-            team_id,
-            block_id,
-            action,
-            pit_lap,
-            new_compound,
-            admin_override
-        )
-    )
+            action = EXCLUDED.action,
+            pit_lap = EXCLUDED.pit_lap,
+            new_compound = EXCLUDED.new_compound,
+            admin_override = EXCLUDED.admin_override
+    """
+    return execute(query, (team_id, block_id, action, pit_lap, new_compound, admin_override))
+
 
 def save_lap_result(
     team_id,
@@ -146,8 +184,7 @@ def save_lap_result(
     pit_stop=0,
     pit_penalty=0
 ):
-    return execute(
-        """
+    query = """
         INSERT INTO lap_results (
             team_id,
             lap_id,
@@ -163,15 +200,17 @@ def save_lap_result(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')
         ON CONFLICT(team_id, lap_id)
         DO UPDATE SET
-            lap_time = excluded.lap_time,
-            cumulative_time = excluded.cumulative_time,
-            position = excluded.position,
-            compound = excluded.compound,
-            tire_age = excluded.tire_age,
-            pit_stop = excluded.pit_stop,
-            pit_penalty = excluded.pit_penalty,
-            status = excluded.status
-        """,
+            lap_time = EXCLUDED.lap_time,
+            cumulative_time = EXCLUDED.cumulative_time,
+            position = EXCLUDED.position,
+            compound = EXCLUDED.compound,
+            tire_age = EXCLUDED.tire_age,
+            pit_stop = EXCLUDED.pit_stop,
+            pit_penalty = EXCLUDED.pit_penalty,
+            status = EXCLUDED.status
+    """
+    return execute(
+        query,
         (
             team_id,
             lap_id,
@@ -184,6 +223,8 @@ def save_lap_result(
             pit_penalty
         )
     )
+
+
 def get_strategy(team_id, block_id):
     return fetch_one(
         """
@@ -203,6 +244,8 @@ def get_strategy(team_id, block_id):
         """,
         (team_id, block_id)
     )
+
+
 def get_block_id(race_id, block_number):
     row = fetch_one(
         """
@@ -323,9 +366,7 @@ def save_car_lap_result(
     lap_id = get_lap_id(block_id, lap_number)
 
     if lap_id is None:
-        raise ValueError(
-            f"Lap {lap_number} does not exist for block {block_id}"
-        )
+        return None
 
     result_id = save_lap_result(
         team_id=team_id,
@@ -340,8 +381,9 @@ def save_car_lap_result(
     )
 
     update_lap_status(lap_id, "COMPLETED")
-
     return result_id
+
+
 def register_team_member(team_id, name, email, registration_no):
     return execute("""
         INSERT INTO team_members (
@@ -355,74 +397,145 @@ def register_team_member(team_id, name, email, registration_no):
 
 
 def init_race_schema(race_id=1, total_laps=50, total_blocks=10):
-    """Ensures a race record with its blocks and laps exists in SQLite."""
+    """Ensures a race record with its blocks and laps exists in PostgreSQL or SQLite."""
     conn = get_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM races WHERE id = ?", (race_id,))
-        if not cursor.fetchone():
-            cursor.execute(
-                """
-                INSERT INTO races (id, name, total_laps, total_blocks, current_lap, current_block, track_state, status)
-                VALUES (?, 'F1 Technovit Grand Prix', ?, ?, 0, 1, 'DRY', 'UPCOMING')
-                """,
-                (race_id, total_laps, total_blocks)
-            )
-            for b in range(1, total_blocks + 1):
-                start_l = (b - 1) * 5 + 1
-                end_l = b * 5
-                cursor.execute(
-                    """
-                    INSERT INTO blocks (race_id, block_number, start_lap, end_lap, status)
-                    VALUES (?, ?, ?, ?, 'LOCKED')
-                    """,
-                    (race_id, b, start_l, end_l)
-                )
-                block_id = cursor.lastrowid
-                for l in range(start_l, end_l + 1):
+        if is_postgres():
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("SELECT id FROM races WHERE id = %s", (race_id,))
+                if not cursor.fetchone():
                     cursor.execute(
                         """
-                        INSERT INTO laps (block_id, lap_number, status)
-                        VALUES (?, ?, 'LOCKED')
+                        INSERT INTO races (id, name, total_laps, total_blocks, current_lap, current_block, track_state, status)
+                        VALUES (%s, 'F1 Technovit Grand Prix', %s, %s, 0, 1, 'DRY', 'UPCOMING')
+                        ON CONFLICT (id) DO NOTHING
                         """,
-                        (block_id, l)
+                        (race_id, total_laps, total_blocks)
                     )
-        conn.commit()
+                    for b in range(1, total_blocks + 1):
+                        start_l = (b - 1) * 5 + 1
+                        end_l = b * 5
+                        cursor.execute(
+                            """
+                            INSERT INTO blocks (race_id, block_number, start_lap, end_lap, status)
+                            VALUES (%s, %s, %s, %s, 'LOCKED')
+                            ON CONFLICT (race_id, block_number) DO NOTHING
+                            RETURNING id
+                            """,
+                            (race_id, b, start_l, end_l)
+                        )
+                        row = cursor.fetchone()
+                        block_id = row["id"] if row else None
+                        if not block_id:
+                            cursor.execute("SELECT id FROM blocks WHERE race_id = %s AND block_number = %s", (race_id, b))
+                            r = cursor.fetchone()
+                            block_id = r["id"] if r else None
+                        if block_id:
+                            for l in range(start_l, end_l + 1):
+                                cursor.execute(
+                                    """
+                                    INSERT INTO laps (block_id, lap_number, status)
+                                    VALUES (%s, %s, 'LOCKED')
+                                    ON CONFLICT (block_id, lap_number) DO NOTHING
+                                    """,
+                                    (block_id, l)
+                                )
+            conn.commit()
+        else:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM races WHERE id = ?", (race_id,))
+            if not cursor.fetchone():
+                cursor.execute(
+                    """
+                    INSERT INTO races (id, name, total_laps, total_blocks, current_lap, current_block, track_state, status)
+                    VALUES (?, 'F1 Technovit Grand Prix', ?, ?, 0, 1, 'DRY', 'UPCOMING')
+                    """,
+                    (race_id, total_laps, total_blocks)
+                )
+                for b in range(1, total_blocks + 1):
+                    start_l = (b - 1) * 5 + 1
+                    end_l = b * 5
+                    cursor.execute(
+                        """
+                        INSERT INTO blocks (race_id, block_number, start_lap, end_lap, status)
+                        VALUES (?, ?, ?, ?, 'LOCKED')
+                        """,
+                        (race_id, b, start_l, end_l)
+                    )
+                    block_id = cursor.lastrowid
+                    for l in range(start_l, end_l + 1):
+                        cursor.execute(
+                            """
+                            INSERT INTO laps (block_id, lap_number, status)
+                            VALUES (?, ?, 'LOCKED')
+                            """,
+                            (block_id, l)
+                        )
+            conn.commit()
     finally:
         conn.close()
 
 
 def get_or_create_team(team_id_str: str, driver_name: str = "") -> int:
-    """Safely retrieves or inserts team into SQLite and returns its integer ID."""
+    """Safely retrieves or inserts team into database and returns its integer ID."""
     conn = get_connection()
     try:
-        cursor = conn.cursor()
-        # If already a number
-        if str(team_id_str).isdigit():
-            t_id = int(team_id_str)
-            cursor.execute("SELECT id FROM teams WHERE id = ?", (t_id,))
-            if cursor.fetchone():
-                return t_id
+        if is_postgres():
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                if str(team_id_str).isdigit():
+                    t_id = int(team_id_str)
+                    cursor.execute("SELECT id FROM teams WHERE id = %s", (t_id,))
+                    if cursor.fetchone():
+                        return t_id
 
-        # Lookup by name
-        cursor.execute("SELECT id FROM teams WHERE name = ?", (str(team_id_str),))
-        row = cursor.fetchone()
-        if row:
-            return row["id"]
+                cursor.execute("SELECT id FROM teams WHERE name = %s", (str(team_id_str),))
+                row = cursor.fetchone()
+                if row:
+                    return row["id"]
 
-        # Insert new team
-        cursor.execute("INSERT INTO teams (name, color) VALUES (?, '#ffffff')", (str(team_id_str),))
-        new_id = cursor.lastrowid
-        cursor.execute(
-            """
-            INSERT OR IGNORE INTO team_cars (team_id, compound, tire_age, total_race_time, vehicle_health, pit_stops, has_used_power)
-            VALUES (?, 'MEDIUM', 0, 0.0, 100.0, 0, 0)
-            """,
-            (new_id,)
-        )
-        conn.commit()
-        return new_id
+                cursor.execute(
+                    "INSERT INTO teams (name, color) VALUES (%s, '#ffffff') ON CONFLICT (name) DO UPDATE SET color = EXCLUDED.color RETURNING id",
+                    (str(team_id_str),)
+                )
+                new_id = cursor.fetchone()["id"]
+                cursor.execute(
+                    """
+                    INSERT INTO team_cars (team_id, compound, tire_age, total_race_time, vehicle_health, pit_stops, has_used_power)
+                    VALUES (%s, 'MEDIUM', 0, 0.0, 100.0, 0, 0)
+                    ON CONFLICT (team_id) DO NOTHING
+                    """,
+                    (new_id,)
+                )
+                conn.commit()
+                return new_id
+        else:
+            cursor = conn.cursor()
+            if str(team_id_str).isdigit():
+                t_id = int(team_id_str)
+                cursor.execute("SELECT id FROM teams WHERE id = ?", (t_id,))
+                if cursor.fetchone():
+                    return t_id
+
+            cursor.execute("SELECT id FROM teams WHERE name = ?", (str(team_id_str),))
+            row = cursor.fetchone()
+            if row:
+                return row["id"]
+
+            cursor.execute("INSERT INTO teams (name, color) VALUES (?, '#ffffff')", (str(team_id_str),))
+            new_id = cursor.lastrowid
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO team_cars (team_id, compound, tire_age, total_race_time, vehicle_health, pit_stops, has_used_power)
+                VALUES (?, 'MEDIUM', 0, 0.0, 100.0, 0, 0)
+                """,
+                (new_id,)
+            )
+            conn.commit()
+            return new_id
     finally:
         conn.close()
+
 
 
