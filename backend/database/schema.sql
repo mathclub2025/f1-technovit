@@ -7,7 +7,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE teams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    color TEXT NOT NULL,
+    color TEXT DEFAULT '#ffffff',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -224,7 +224,7 @@ CREATE TABLE team_members (
     team_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    registration_no TEXT NOT NULL UNIQUE,
+    registration_no TEXT,
 
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
