@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Zap, X } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { toast } from "sonner";
 
 const POWERS = [
   {
@@ -60,6 +61,7 @@ export default function PowersPage() {
       target_team_id: powerId === "MINISTER_OF_DEFENCE" ? alonsoTarget : null,
       plan_e_penalty: powerId === "PLAN_E" ? parseFloat(planEPenalty) : null,
     });
+    toast.success("Power Queued", { description: `${powerId} queued for ${targetTeam}. Will execute in next block.` });
   };
 
   return (

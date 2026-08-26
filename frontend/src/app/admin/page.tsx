@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Clock, Play, Flag, SkipForward, Monitor } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { toast } from "sonner";
 
 export default function AdminOverviewPage() {
   const { 
@@ -31,7 +32,27 @@ export default function AdminOverviewPage() {
     if (token) {
       connectRace(token);
     }
-    return () => disconnect();
+
+    // Lightweight sync heartbeat
+    const poll = setInterval(() => {
+      fetch("/api/standings")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.current_block !== undefined) useRaceStore.setState({ currentBlock: data.current_block });
+          if (data.current_lap !== undefined) useRaceStore.setState({ currentLap: data.current_lap });
+          if (data.track_state !== undefined) useRaceStore.setState({ trackState: data.track_state });
+          if (data.window_open !== undefined) useRaceStore.setState({ windowOpen: data.window_open });
+          if (data.window_expires_at !== undefined) useRaceStore.setState({ windowExpiresAt: data.window_expires_at });
+          if (data.standings !== undefined) useRaceStore.setState({ standings: data.standings });
+          if (data.cars !== undefined) useRaceStore.setState({ cars: data.cars });
+        })
+        .catch(() => {});
+    }, 2500);
+
+    return () => {
+      clearInterval(poll);
+      disconnect();
+    };
   }, [connectRace, disconnect]);
 
   useEffect(() => {
@@ -61,44 +82,85 @@ export default function AdminOverviewPage() {
       };
     }
 
-    await fetch("/api/admin/init-grid", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: payload ? JSON.stringify(payload) : undefined
-    });
+    try {
+      const res = await fetch("/api/admin/init-grid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: payload ? JSON.stringify(payload) : undefined
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Grid Initialized", { description: data.message || "Teams ready on starting grid." });
+      } else {
+        toast.error("Grid Error", { description: data.detail || "Failed to initialize grid." });
+      }
+    } catch (e) {
+      toast.error("Network Error", { description: "Failed to reach server." });
+    }
   };
 
   const handleStartWindow = async () => {
     const token = localStorage.getItem("race_token");
-    await fetch("/api/admin/start-window", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ duration_seconds: 180, block_number: currentBlock })
-    });
+    try {
+      const res = await fetch("/api/admin/start-window", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ duration_seconds: 180, block_number: currentBlock })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Window Started", { description: `Block ${currentBlock} strategy window is open (3:00).` });
+      } else {
+        toast.error("Error", { description: data.detail || "Could not start window." });
+      }
+    } catch (e) {
+      toast.error("Network Error", { description: "Failed to start window." });
+    }
   };
 
   const handleExecuteBlock = async () => {
     const token = localStorage.getItem("race_token");
-    await fetch("/api/admin/execute-block", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({
-        block_number: currentBlock,
-        start_lap: currentLap + 1,
-        end_lap: currentLap + 5,
-        track_state: trackState,
-        active_modifiers: queuedPowers
-      })
-    });
+    try {
+      toast.info(`Executing Block ${currentBlock}...`, { description: `Simulating Laps ${currentLap + 1} to ${currentLap + 5}.` });
+      const res = await fetch("/api/admin/execute-block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          block_number: currentBlock,
+          start_lap: currentLap + 1,
+          end_lap: currentLap + 5,
+          track_state: trackState,
+          active_modifiers: queuedPowers
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Block ${currentBlock} Completed!`, { description: data.message });
+      } else {
+        toast.error("Execution Error", { description: data.detail || "Could not execute block." });
+      }
+    } catch (e) {
+      toast.error("Network Error", { description: "Failed to execute block." });
+    }
     clearPowers();
   };
 
   const handleForceClose = async () => {
     const token = localStorage.getItem("race_token");
-    await fetch("/api/admin/force-submit", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${token}` }
-    });
+    try {
+      const res = await fetch("/api/admin/force-submit", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Window Force Closed", { description: "Non-submitted teams defaulted to STAY_OUT." });
+      } else {
+        toast.error("Error", { description: data.detail || "Could not force close window." });
+      }
+    } catch (e) {
+      toast.error("Network Error", { description: "Failed to force close." });
+    }
   };
 
   const formatTime = (seconds: number) => {

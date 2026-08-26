@@ -549,11 +549,15 @@ async def start_window(
 
     window_timer_task = asyncio.create_task(_auto_lock_timer(duration))
 
+    standings = engine.build_standings(cars)
     event_data = {
         "block_number": current_block,
         "duration_seconds": duration,
         "expires_at": window_expires_at,
+        "window_expires_at": window_expires_at,
         "window_open": True,
+        "standings": standings,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
     }
     await broadcast_race("WINDOW_START", event_data)
     await broadcast_all_team_feeds("WINDOW_START", event_data)
@@ -564,6 +568,7 @@ async def start_window(
         "duration_seconds": duration,
         "expires_at": window_expires_at,
         "block_number": current_block,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
     }
 
 
@@ -572,17 +577,24 @@ async def force_submit(
     payload: Optional[ForceSubmitPayload] = None,
     user: TokenPayload = Depends(require_admin),
 ):
+    global window_open, window_expires_at, window_timer_task
+
+    if window_timer_task and not window_timer_task.done():
+        window_timer_task.cancel()
+
+    window_open = False
+    window_expires_at = None
+
     target_team = payload.team_id if payload else None
 
     if target_team:
         car = cars.get(target_team)
         if car:
-            car.action = ActionType.STAY_OUT
-            car.pit_lap = None
-            car.next_compound = None
-            car.has_submitted = True
-            await broadcast_race("FORCE_SUBMITTED", {"team_id": target_team})
-            await broadcast_team(target_team, "FORCE_SUBMITTED", {"team_id": target_team})
+            if not car.has_submitted:
+                car.action = ActionType.STAY_OUT
+                car.pit_lap = None
+                car.next_compound = None
+                car.has_submitted = True
     else:
         for car in cars.values():
             if not car.has_submitted:
@@ -590,10 +602,25 @@ async def force_submit(
                 car.pit_lap = None
                 car.next_compound = None
                 car.has_submitted = True
-        await broadcast_race("FORCE_SUBMITTED_ALL", {})
-        await broadcast_all_team_feeds("FORCE_SUBMITTED_ALL", {})
 
-    return {"status": "ok", "message": "Force submit applied successfully"}
+    standings = engine.build_standings(cars)
+    event_payload = {
+        "message": "Submission window force closed by Race Director.",
+        "window_open": False,
+        "current_block": current_block,
+        "standings": standings,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
+    }
+    await broadcast_race("WINDOW_LOCKED", event_payload)
+    await broadcast_all_team_feeds("WINDOW_LOCKED", event_payload)
+
+    return {
+        "status": "ok",
+        "message": "Force close applied successfully. Submission window locked.",
+        "window_open": False,
+        "standings": standings,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
+    }
 
 
 @app.post("/api/admin/track-state")

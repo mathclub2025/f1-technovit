@@ -43,7 +43,27 @@ export default function TeamStrategyPage() {
         connectTeam(resolvedTeamId, token);
       }
     }
-    return () => disconnect();
+
+    // Heartbeat poll for fast window open / lock sync
+    const poll = setInterval(() => {
+      fetch("/api/standings")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.current_block !== undefined) useRaceStore.setState({ currentBlock: data.current_block });
+          if (data.current_lap !== undefined) useRaceStore.setState({ currentLap: data.current_lap });
+          if (data.track_state !== undefined) useRaceStore.setState({ trackState: data.track_state });
+          if (data.window_open !== undefined) useRaceStore.setState({ windowOpen: data.window_open });
+          if (data.window_expires_at !== undefined) useRaceStore.setState({ windowExpiresAt: data.window_expires_at });
+          if (data.standings !== undefined) useRaceStore.setState({ standings: data.standings });
+          if (data.cars !== undefined) useRaceStore.setState({ cars: data.cars });
+        })
+        .catch(() => {});
+    }, 2000);
+
+    return () => {
+      clearInterval(poll);
+      disconnect();
+    };
   }, [connectTeam, disconnect]);
 
   useEffect(() => {
