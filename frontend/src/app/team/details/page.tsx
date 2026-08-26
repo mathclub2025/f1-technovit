@@ -1,9 +1,38 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Mail, Shield, Flag } from "lucide-react";
 
 export default function TeamDetailsPage() {
+  const [teamName, setTeamName] = useState("Loading...");
+  const [members, setMembers] = useState<{name: string, email: string}[]>([]);
+
+  useEffect(() => {
+    // Read from localStorage (Mock DB integration until backend is fixed)
+    const storedMembers = localStorage.getItem("team_members");
+    if (storedMembers) {
+      setMembers(JSON.parse(storedMembers));
+    } else {
+      setMembers([{ name: "Team Captain", email: "captain@f1.com" }]);
+    }
+
+    const token = localStorage.getItem("race_token");
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        // Format team_id back to Team Name (e.g., scuderia_ferrari -> Scuderia Ferrari)
+        const name = payload.teamId 
+          ? payload.teamId.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+          : "Unknown Team";
+        setTeamName(name);
+      } catch (e) {
+        setTeamName("Error loading team");
+      }
+    }
+  }, []);
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
       <PageHeader
@@ -24,7 +53,7 @@ export default function TeamDetailsPage() {
           <CardContent className="space-y-4">
             <div>
               <div className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-wider text-[10px]">Team Name</div>
-              <div className="text-2xl font-bold font-display">Scuderia Ferrari</div>
+              <div className="text-2xl font-bold font-display">{teamName}</div>
             </div>
             <div>
               <div className="text-sm font-medium text-muted-foreground mb-1.5 uppercase tracking-wider text-[10px]">Current Status</div>
@@ -45,53 +74,24 @@ export default function TeamDetailsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              
-              {/* Captain */}
-              <div className="flex items-center justify-between p-3.5 border border-border rounded-lg bg-muted/20">
-                <div className="flex items-center gap-3.5">
-                  <div className="p-2 bg-primary/10 rounded-full">
-                    <Shield className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm flex items-center gap-2">
-                      Team Captain <Badge variant="secondary" className="text-[9px] h-4 px-1.5">You</Badge>
+              {/* Members */}
+              {members.map((member, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3.5 border border-border rounded-lg bg-muted/20">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`p-2 rounded-full ${idx === 0 ? 'bg-primary/10' : 'bg-muted'}`}>
+                      {idx === 0 ? <Shield className="h-5 w-5 text-primary" /> : <Users className="h-5 w-5 text-muted-foreground" />}
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <Mail className="h-3 w-3" /> captain@gmail.com
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Teammate 2 */}
-              <div className="flex items-center justify-between p-3.5 border border-border rounded-lg bg-muted/20">
-                <div className="flex items-center gap-3.5">
-                  <div className="p-2 bg-muted rounded-full">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm">Teammate 2</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <Mail className="h-3 w-3" /> teammate2@gmail.com
+                    <div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        {member.name} {idx === 0 && <Badge variant="secondary" className="text-[9px] h-4 px-1.5">Captain</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                        <Mail className="h-3 w-3" /> {member.email}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Teammate 3 */}
-              <div className="flex items-center justify-between p-3.5 border border-border rounded-lg bg-muted/20">
-                <div className="flex items-center gap-3.5">
-                  <div className="p-2 bg-muted rounded-full">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm">Teammate 3</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <Mail className="h-3 w-3" /> teammate3@gmail.com
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ))}
 
             </div>
           </CardContent>

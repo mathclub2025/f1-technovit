@@ -18,7 +18,7 @@ export function AdminSidebar() {
     { name: "Superpower Matrix", href: "/admin/powers", icon: Zap },
     { name: "Weather Controls", href: "/admin/weather", icon: CloudLightning },
     { name: "Penalty Overrides", href: "/admin/penalties", icon: ShieldAlert },
-    { name: "Race Projection", href: "/admin/projection", icon: Monitor },
+    { name: "Projector Screen", href: "/race", icon: Monitor },
   ];
 
   return (
