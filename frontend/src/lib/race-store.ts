@@ -1,277 +1,147 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { Team, RaceStatus, RoundTiming, TeamLiveStats } from "@/types/race";
-import { F1_PRESET_TEAMS } from "@/lib/presets";
-import { soundManager } from "@/lib/sound";
-import { toast } from "sonner";
 
-export const TOTAL_ROUNDS = 10;
-export const TOTAL_LAPS = 50;
-
-interface RaceState {
-  teams: Team[];
-  status: RaceStatus;
-  currentRound: number;
-  speedMultiplier: number;
-  roundElapsed: number;
-  roundHistory: RoundTiming[];
-  currentRoundTimings: Record<string, number>;
-  completedCumulativeTimes: Record<string, number>;
-  bestRoundTimes: Record<string, number>;
-  previousPositions: Record<string, number>;
-  inputModalOpen: boolean;
-
-  // Actions
-  setTeams: (teams: Team[]) => void;
-  setInputModalOpen: (open: boolean) => void;
-  setSpeedMultiplier: (speed: number) => void;
-  startRace: () => void;
-  startRound: (timings: Record<string, number>) => void;
-  togglePlayPause: () => void;
-  skipRound: () => void;
-  proceedToNextRound: () => void;
-  resetRace: () => void;
-  tick: (deltaSec: number) => void;
-  getLiveStats: () => TeamLiveStats[];
+interface StandingsRow {
+  position: number;
+  team_id: string;
+  driver: string;
+  total_race_time: number;
+  gap_to_leader: number;
+  gap_to_ahead: number;
+  pit_stops: number;
+  compound: string;
+  status: string;
 }
 
-export const useRaceStore = create<RaceState>()(
-  persist(
-    (set, get) => ({
-      teams: F1_PRESET_TEAMS.map((pt, idx) => ({
-        id: `team-${idx + 1}`,
-        name: pt.name,
-        driverName: pt.driverName,
-        color: pt.color,
-        carNumber: pt.carNumber,
-      })),
-      status: "SETUP",
-      currentRound: 1,
-      speedMultiplier: 2,
-      roundElapsed: 0,
-      roundHistory: [],
-      currentRoundTimings: {},
-      completedCumulativeTimes: {},
-      bestRoundTimes: {},
-      previousPositions: {},
-      inputModalOpen: false,
+interface CarState {
+  team_id: string;
+  driver: string;
+  compound: string;
+  tire_age: number;
+  total_race_time: number;
+  last_lap_time: number;
+  action: string;
+  pit_lap: number | null;
+  next_compound: string | null;
+  pit_stop_count: number;
+  status: string;
+  has_submitted: boolean;
+  has_used_power: boolean;
+}
 
-      setTeams: (teams) => set({ teams }),
-      setInputModalOpen: (open) => set({ inputModalOpen: open }),
-      setSpeedMultiplier: (speed) => set({ speedMultiplier: speed }),
+interface PowerAssignment {
+  team_id: string;
+  power: string;
+  target_team_id: string | null;
+  plan_e_penalty: number | null;
+}
 
-      startRace: () => {
+interface RaceState {
+  currentBlock: number;
+  currentLap: number;
+  trackState: string;
+  windowOpen: boolean;
+  windowExpiresAt: number | null;
+  standings: StandingsRow[];
+  cars: Record<string, CarState>;
+  socket: WebSocket | null;
+  isConnected: boolean;
+  token: string | null;
+  queuedPowers: PowerAssignment[];
+
+  connectRace: (token: string) => void;
+  connectTeam: (teamId: string, token: string) => void;
+  disconnect: () => void;
+  setToken: (token: string) => void;
+  addPower: (power: PowerAssignment) => void;
+  clearPowers: () => void;
+}
+
+export const useRaceStore = create<RaceState>((set, get) => ({
+  currentBlock: 1,
+  currentLap: 0,
+  trackState: "DRY",
+  windowOpen: false,
+  windowExpiresAt: null,
+  standings: [],
+  cars: {},
+  socket: null,
+  isConnected: false,
+  token: null,
+  queuedPowers: [],
+
+  setToken: (token: string) => set({ token }),
+  addPower: (power: PowerAssignment) => set((state) => ({ queuedPowers: [...state.queuedPowers, power] })),
+  clearPowers: () => set({ queuedPowers: [] }),
+
+  connectRace: (token: string) => {
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+    const socket = new WebSocket(`${wsUrl}/ws/race?token=${token}`);
+
+    socket.onopen = () => set({ isConnected: true, socket });
+    socket.onclose = () => set({ isConnected: false, socket: null });
+    
+    socket.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "INITIAL_STATE" || msg.type === "LAP_UPDATE" || msg.type === "WINDOW_LOCKED" || msg.type === "WINDOW_START" || msg.type === "BLOCK_COMPLETED" || msg.type === "GRID_INITIALIZED") {
+        if (msg.data.current_block !== undefined) set({ currentBlock: msg.data.current_block });
+        if (msg.data.current_lap !== undefined) set({ currentLap: msg.data.current_lap });
+        if (msg.data.track_state !== undefined) set({ trackState: msg.data.track_state });
+        if (msg.data.window_open !== undefined) set({ windowOpen: msg.data.window_open });
+        if (msg.data.expires_at !== undefined) set({ windowExpiresAt: msg.data.expires_at });
+        if (msg.data.window_expires_at !== undefined) set({ windowExpiresAt: msg.data.window_expires_at });
+        if (msg.data.standings !== undefined) set({ standings: msg.data.standings });
+        if (msg.data.cars !== undefined) set({ cars: msg.data.cars });
+      }
+    };
+  },
+
+  connectTeam: (teamId: string, token: string) => {
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+    const socket = new WebSocket(`${wsUrl}/ws/team/${teamId}?token=${token}`);
+
+    socket.onopen = () => set({ isConnected: true, socket });
+    socket.onclose = () => set({ isConnected: false, socket: null });
+    
+    socket.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "INITIAL_TEAM_STATE") {
         set({
-          currentRound: 1,
-          roundHistory: [],
-          roundElapsed: 0,
-          completedCumulativeTimes: {},
-          bestRoundTimes: {},
-          previousPositions: {},
-          status: "INPUT",
-          inputModalOpen: true,
+          currentBlock: msg.data.current_block,
+          currentLap: msg.data.current_lap,
+          trackState: msg.data.track_state,
+          windowOpen: msg.data.window_open,
+          windowExpiresAt: msg.data.window_expires_at,
+          standings: msg.data.standings,
         });
-        soundManager.playClick();
-      },
-
-      startRound: (timings) => {
-        set({
-          currentRoundTimings: timings,
-          roundElapsed: 0,
-          status: "RUNNING",
-          inputModalOpen: false,
-        });
-        soundManager.playCountdownBeep(false);
-        toast.success(`Round ${get().currentRound} started!`);
-      },
-
-      togglePlayPause: () => {
-        const { status } = get();
-        if (status === "RUNNING") {
-          set({ status: "PAUSED" });
-        } else if (status === "PAUSED") {
-          set({ status: "RUNNING" });
+        if (msg.data.car) {
+          set((state) => ({ cars: { ...state.cars, [teamId]: msg.data.car } }));
         }
-      },
-
-      skipRound: () => {
-        const { currentRoundTimings } = get();
-        const maxTime = Math.max(...Object.values(currentRoundTimings), 45);
-        set({ roundElapsed: maxTime + 0.1 });
-        get().tick(0.01);
-      },
-
-      proceedToNextRound: () => {
-        const nextRound = get().currentRound + 1;
+      } else if (msg.type === "LAP_UPDATE") {
         set({
-          currentRound: nextRound,
-          roundElapsed: 0,
-          status: "INPUT",
-          inputModalOpen: true,
+          currentLap: msg.data.lap_number,
+          standings: msg.data.standings,
         });
-        soundManager.playClick();
-      },
-
-      resetRace: () => {
-        set({
-          status: "SETUP",
-          currentRound: 1,
-          roundElapsed: 0,
-          roundHistory: [],
-          currentRoundTimings: {},
-          completedCumulativeTimes: {},
-          bestRoundTimes: {},
-          previousPositions: {},
-          inputModalOpen: false,
-        });
-        toast.info("Race simulation reset to team setup.");
-      },
-
-      tick: (deltaSec) => {
-        const {
-          status,
-          roundElapsed,
-          currentRoundTimings,
-          completedCumulativeTimes,
-          bestRoundTimes,
-          teams,
-          currentRound,
-        } = get();
-
-        if (status !== "RUNNING") return;
-
-        const newElapsed = roundElapsed + deltaSec;
-        set({ roundElapsed: newElapsed });
-
-        // Check if all finished
-        const timings = Object.values(currentRoundTimings);
-        const allFinished = timings.length > 0 && timings.every((target) => newElapsed >= target);
-
-        if (allFinished) {
-          const nextCompleted: Record<string, number> = { ...completedCumulativeTimes };
-          const nextBest: Record<string, number> = { ...bestRoundTimes };
-          const nextPrevPositions: Record<string, number> = {};
-
-          teams.forEach((team) => {
-            const rTime = currentRoundTimings[team.id] || 40.0;
-            nextCompleted[team.id] = (nextCompleted[team.id] || 0) + rTime;
-
-            if (!nextBest[team.id] || rTime < nextBest[team.id]) {
-              nextBest[team.id] = rTime;
-            }
-          });
-
-          const sorted = [...teams].sort(
-            (a, b) => (nextCompleted[a.id] || 0) - (nextCompleted[b.id] || 0)
-          );
-          sorted.forEach((t, idx) => {
-            nextPrevPositions[t.id] = idx + 1;
-          });
-
-          const newRoundHistory = [
-            ...get().roundHistory,
-            { round: currentRound, times: { ...currentRoundTimings } },
-          ];
-
-          soundManager.playCountdownBeep(true);
-
-          if (currentRound >= TOTAL_ROUNDS) {
-            set({
-              status: "FINISHED",
-              completedCumulativeTimes: nextCompleted,
-              bestRoundTimes: nextBest,
-              previousPositions: nextPrevPositions,
-              roundHistory: newRoundHistory,
-            });
-            toast.success("Grand Prix Complete! 50 Laps Finished 🏁");
-          } else {
-            set({
-              status: "ROUND_COMPLETE",
-              completedCumulativeTimes: nextCompleted,
-              bestRoundTimes: nextBest,
-              previousPositions: nextPrevPositions,
-              roundHistory: newRoundHistory,
-            });
-            toast.info(`Round ${currentRound} finished! Leader: ${sorted[0]?.name}`);
-          }
+        if (msg.data.car) {
+          set((state) => ({ cars: { ...state.cars, [teamId]: msg.data.car } }));
         }
-      },
+      } else if (msg.type === "WINDOW_START" || msg.type === "WINDOW_LOCKED" || msg.type === "BLOCK_COMPLETED" || msg.type === "GRID_INITIALIZED") {
+        if (msg.data.current_block !== undefined) set({ currentBlock: msg.data.current_block });
+        if (msg.data.current_lap !== undefined) set({ currentLap: msg.data.current_lap });
+        if (msg.data.track_state !== undefined) set({ trackState: msg.data.track_state });
+        if (msg.data.window_open !== undefined) set({ windowOpen: msg.data.window_open });
+        if (msg.data.expires_at !== undefined) set({ windowExpiresAt: msg.data.expires_at });
+        if (msg.data.window_expires_at !== undefined) set({ windowExpiresAt: msg.data.window_expires_at });
+        if (msg.data.standings !== undefined) set({ standings: msg.data.standings });
+        if (msg.data.cars !== undefined) set({ cars: msg.data.cars });
+      }
+    };
+  },
 
-      getLiveStats: () => {
-        const {
-          teams,
-          currentRoundTimings,
-          completedCumulativeTimes,
-          roundElapsed,
-          currentRound,
-          previousPositions,
-          bestRoundTimes,
-          status,
-        } = get();
-
-        const rawList = teams.map((team) => {
-          const targetRoundTime = currentRoundTimings[team.id] || 40.0;
-          const completedTotal = completedCumulativeTimes[team.id] || 0;
-          const elapsedInCurrent = Math.min(roundElapsed, targetRoundTime);
-          const progress = targetRoundTime > 0 ? Math.min(1, roundElapsed / targetRoundTime) : 0;
-          const isFinished = progress >= 1;
-
-          const roundLaps = Math.min(5, Math.floor(progress * 5) + 1);
-          const currentLap = Math.min(TOTAL_LAPS, (currentRound - 1) * 5 + (isFinished ? 5 : roundLaps));
-          const cumulativeTime = completedTotal + elapsedInCurrent;
-
-          const paceFactor = targetRoundTime > 0 ? 40.0 / targetRoundTime : 1.0;
-          const speedKmh = isFinished ? 0 : 280 + Math.sin(progress * Math.PI * 5) * 20 + paceFactor * 30;
-
-          return {
-            teamId: team.id,
-            name: team.name,
-            color: team.color,
-            carNumber: team.carNumber,
-            driverName: team.driverName,
-            currentRoundTime: targetRoundTime,
-            currentRoundElapsed: elapsedInCurrent,
-            progress,
-            currentLap,
-            cumulativeTime,
-            completedCumulativeTime: completedTotal,
-            position: 1,
-            previousPosition: previousPositions[team.id] || 1,
-            gapToLeader: 0,
-            gapToAhead: 0,
-            isRoundFinished: isFinished,
-            bestRoundTime: bestRoundTimes[team.id] || null,
-            speedKmh: status === "RUNNING" ? speedKmh : 0,
-          } as TeamLiveStats;
-        });
-
-        // Sort by cumulative time
-        const sorted = [...rawList].sort((a, b) => a.cumulativeTime - b.cumulativeTime);
-        const leaderTime = sorted[0]?.cumulativeTime || 0;
-
-        return sorted.map((st, idx) => {
-          const prevCar = sorted[idx - 1];
-          return {
-            ...st,
-            position: idx + 1,
-            gapToLeader: Math.max(0, st.cumulativeTime - leaderTime),
-            gapToAhead: Math.max(0, prevCar ? st.cumulativeTime - prevCar.cumulativeTime : 0),
-          };
-        });
-      },
-    }),
-    {
-      name: "f1-race-store",
-      partialize: (state) => ({
-        teams: state.teams,
-        status: state.status,
-        currentRound: state.currentRound,
-        speedMultiplier: state.speedMultiplier,
-        roundHistory: state.roundHistory,
-        completedCumulativeTimes: state.completedCumulativeTimes,
-        bestRoundTimes: state.bestRoundTimes,
-        previousPositions: state.previousPositions,
-      }),
+  disconnect: () => {
+    const { socket } = get();
+    if (socket) {
+      socket.close();
     }
-  )
-);
+    set({ socket: null, isConnected: false });
+  },
+}));

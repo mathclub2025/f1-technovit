@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sun, CloudRain, CloudDrizzle } from "lucide-react";
+import { useRaceStore } from "@/lib/race-store";
 
 export default function WeatherPage() {
-  const [weather, setWeather] = useState<"DRY" | "WET">("DRY");
+  const { trackState } = useRaceStore();
+
+  const handleSetWeather = async (state: "DRY" | "WET") => {
+    const token = localStorage.getItem("race_token");
+    await fetch("/api/admin/track-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ track_state: state })
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
@@ -24,15 +33,15 @@ export default function WeatherPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
-              {weather === "DRY" ? (
+              {trackState === "DRY" ? (
                 <Sun className="h-8 w-8 text-amber-500" />
               ) : (
                 <CloudRain className="h-8 w-8 text-blue-500" />
               )}
-              <div className="text-3xl font-bold font-display">{weather === "DRY" ? "Dry" : "Wet"}</div>
+              <div className="text-3xl font-bold font-display">{trackState === "DRY" ? "Dry" : "Wet"}</div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              {weather === "DRY" ? "Phase A formulas active. Standard tire degradation." : "Phase B formulas active. Wet-on-slicks penalty enforced."}
+              {trackState === "DRY" ? "Phase A formulas active. Standard tire degradation." : "Phase B formulas active. Wet-on-slicks penalty enforced."}
             </p>
           </CardContent>
         </Card>
@@ -42,7 +51,7 @@ export default function WeatherPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Active Compounds</CardTitle>
           </CardHeader>
           <CardContent>
-            {weather === "DRY" ? (
+            {trackState === "DRY" ? (
               <div className="space-y-2">
                 {[
                   { name: "Soft", color: "bg-red-500" },
@@ -84,15 +93,15 @@ export default function WeatherPage() {
         <CardContent>
           <div className="flex gap-3">
             <Button
-              variant={weather === "DRY" ? "default" : "outline"}
-              onClick={() => setWeather("DRY")}
+              variant={trackState === "DRY" ? "default" : "outline"}
+              onClick={() => handleSetWeather("DRY")}
               className="gap-1.5"
             >
               <Sun className="h-4 w-4" /> Set Dry
             </Button>
             <Button
-              variant={weather === "WET" ? "default" : "outline"}
-              onClick={() => setWeather("WET")}
+              variant={trackState === "WET" ? "default" : "outline"}
+              onClick={() => handleSetWeather("WET")}
               className="gap-1.5"
             >
               <CloudRain className="h-4 w-4" /> Set Wet

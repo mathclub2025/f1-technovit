@@ -1,12 +1,114 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Users, Clock, Play, Pause } from "lucide-react";
+import { Users, Clock, Play, Flag, SkipForward } from "lucide-react";
+import { useRaceStore } from "@/lib/race-store";
 
 export default function AdminOverviewPage() {
+  const { 
+    currentBlock, 
+    currentLap, 
+    trackState, 
+    windowOpen, 
+    windowExpiresAt, 
+    cars,
+    queuedPowers,
+    clearPowers,
+    connectRace,
+    disconnect
+  } = useRaceStore();
+
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [customTeams, setCustomTeams] = useState<string>("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("race_token");
+    if (token) {
+      connectRace(token);
+    }
+    return () => disconnect();
+  }, [connectRace, disconnect]);
+
+  useEffect(() => {
+    if (!windowOpen || !windowExpiresAt) {
+      setTimeLeft(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.floor(windowExpiresAt - Date.now() / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [windowOpen, windowExpiresAt]);
+
+  const handleInitGrid = async () => {
+    const token = localStorage.getItem("race_token");
+    let payload = undefined;
+    
+    if (customTeams.trim()) {
+      const teamNames = customTeams.split(",").map(t => t.trim()).filter(Boolean);
+      payload = {
+        teams: teamNames.map(name => ({
+          team_id: name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+          driver: name
+        }))
+      };
+    }
+
+    await fetch("/api/admin/init-grid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: payload ? JSON.stringify(payload) : undefined
+    });
+  };
+
+  const handleStartWindow = async () => {
+    const token = localStorage.getItem("race_token");
+    await fetch("/api/admin/start-window", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ duration_seconds: 180, block_number: currentBlock })
+    });
+  };
+
+  const handleExecuteBlock = async () => {
+    const token = localStorage.getItem("race_token");
+    await fetch("/api/admin/execute-block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({
+        block_number: currentBlock,
+        start_lap: currentLap + 1,
+        end_lap: currentLap + 5,
+        track_state: trackState,
+        active_modifiers: queuedPowers
+      })
+    });
+    clearPowers();
+  };
+
+  const handleForceClose = async () => {
+    const token = localStorage.getItem("race_token");
+    await fetch("/api/admin/force-submit", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const activeTeamsCount = Object.keys(cars).length;
+  const submissionsCount = Object.values(cars).filter(c => c.has_submitted).length;
+
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
       <PageHeader
@@ -14,12 +116,23 @@ export default function AdminOverviewPage() {
         title="Admin Overview"
         description="Monitor race state, team submissions, and manage the Grand Prix."
         actions={
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Pause className="h-3.5 w-3.5" /> Pause Race
+          <div className="flex gap-2 items-center">
+            <input 
+              type="text" 
+              placeholder="e.g. Alpha, Beta, Delta..."
+              value={customTeams}
+              onChange={(e) => setCustomTeams(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:ring-1 focus:ring-red-600 w-48"
+              title="Comma-separated list of team names formed today"
+            />
+            <Button onClick={handleInitGrid} variant="outline" size="sm" className="gap-1.5">
+              <Flag className="h-3.5 w-3.5" /> Init Grid
             </Button>
-            <Button size="sm" className="gap-1.5">
-              <Play className="h-3.5 w-3.5" /> Start Next Block
+            <Button onClick={handleStartWindow} variant="secondary" size="sm" className="gap-1.5" disabled={windowOpen}>
+              <Play className="h-3.5 w-3.5" /> Start Window
+            </Button>
+            <Button onClick={handleExecuteBlock} size="sm" className="gap-1.5" disabled={windowOpen && timeLeft > 0}>
+              <SkipForward className="h-3.5 w-3.5" /> Execute Block {currentBlock}
             </Button>
           </div>
         }
@@ -32,8 +145,8 @@ export default function AdminOverviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Current Lap</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-display">5 / 50</div>
-            <p className="text-xs text-muted-foreground mt-1">Block 1 of 10</p>
+            <div className="text-3xl font-bold font-display">{currentLap} / 50</div>
+            <p className="text-xs text-muted-foreground mt-1">Block {currentBlock} of 10</p>
           </CardContent>
         </Card>
         <Card>
@@ -41,8 +154,8 @@ export default function AdminOverviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Active Teams</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-display">8</div>
-            <p className="text-xs text-muted-foreground mt-1">All teams registered</p>
+            <div className="text-3xl font-bold font-display">{activeTeamsCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Connected on grid</p>
           </CardContent>
         </Card>
         <Card>
@@ -50,7 +163,7 @@ export default function AdminOverviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Submissions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-display text-emerald-600 dark:text-emerald-500">6 / 8</div>
+            <div className="text-3xl font-bold font-display text-emerald-600 dark:text-emerald-500">{submissionsCount} / {activeTeamsCount}</div>
             <p className="text-xs text-muted-foreground mt-1">For current block</p>
           </CardContent>
         </Card>
@@ -59,8 +172,8 @@ export default function AdminOverviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Track State</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-display">Dry</div>
-            <p className="text-xs text-muted-foreground mt-1">Phase A active</p>
+            <div className="text-3xl font-bold font-display">{trackState}</div>
+            <p className="text-xs text-muted-foreground mt-1">Global weather</p>
           </CardContent>
         </Card>
       </div>
@@ -82,34 +195,30 @@ export default function AdminOverviewPage() {
                   <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Action</th>
                   <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Compound</th>
                   <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Tire Age</th>
-                  <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Position</th>
+                  <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Pit Count</th>
                   <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { name: "Team Redbull", action: "Stay Out", compound: "Hard", age: 5, pos: "P1", submitted: true },
-                  { name: "Team Mercedes", action: "Pit Stop", compound: "Soft → Med", age: 0, pos: "P2", submitted: true },
-                  { name: "Team Aston", action: "Stay Out", compound: "Medium", age: 3, pos: "P3", submitted: true },
-                  { name: "Team Ferrari", action: "Stay Out", compound: "Hard", age: 5, pos: "P4", submitted: true },
-                  { name: "Team McLaren", action: "Pit Stop", compound: "Med → Soft", age: 0, pos: "P5", submitted: true },
-                  { name: "Team Alpine", action: "Stay Out", compound: "Soft", age: 4, pos: "P6", submitted: true },
-                  { name: "Team Haas", action: "—", compound: "Medium", age: 5, pos: "P7", submitted: false },
-                  { name: "Team Williams", action: "—", compound: "Hard", age: 5, pos: "P8", submitted: false },
-                ].map((t, i) => (
-                  <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-3 font-medium">{t.name}</td>
-                    <td className="py-2.5 px-3">{t.action}</td>
-                    <td className="py-2.5 px-3 font-mono text-xs">{t.compound}</td>
-                    <td className="py-2.5 px-3 font-mono text-xs">{t.age} laps</td>
-                    <td className="py-2.5 px-3 font-mono text-xs">{t.pos}</td>
+                {Object.values(cars).map((car) => (
+                  <tr key={car.team_id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                    <td className="py-2.5 px-3 font-medium">{car.driver} ({car.team_id})</td>
+                    <td className="py-2.5 px-3">{car.action}</td>
+                    <td className="py-2.5 px-3 font-mono text-xs">{car.next_compound ? `${car.compound} → ${car.next_compound}` : car.compound}</td>
+                    <td className="py-2.5 px-3 font-mono text-xs">{car.tire_age} laps</td>
+                    <td className="py-2.5 px-3 font-mono text-xs">{car.pit_stop_count}</td>
                     <td className="py-2.5 px-3">
-                      <Badge variant={t.submitted ? "default" : "secondary"}>
-                        {t.submitted ? "Submitted" : "Pending"}
+                      <Badge variant={car.has_submitted ? "default" : "secondary"}>
+                        {car.has_submitted ? "Submitted" : "Pending"}
                       </Badge>
                     </td>
                   </tr>
                 ))}
+                {activeTeamsCount === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-6 text-muted-foreground">Grid not initialized. Click Init Grid.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -126,14 +235,18 @@ export default function AdminOverviewPage() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div className="text-4xl font-bold font-display font-mono">2:47</div>
+            <div className="text-4xl font-bold font-display font-mono">
+              {windowOpen ? formatTime(timeLeft) : "0:00"}
+            </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">Reset Timer</Button>
-              <Button variant="destructive" size="sm">Force Close</Button>
+              <Button onClick={handleForceClose} variant="destructive" size="sm" disabled={!windowOpen}>Force Close</Button>
             </div>
           </div>
           <div className="h-2 w-full rounded-full bg-muted overflow-hidden mt-4">
-            <div className="h-full rounded-full bg-primary w-[85%] transition-all"></div>
+            <div 
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: windowOpen ? `${(timeLeft / 180) * 100}%` : "0%" }}
+            ></div>
           </div>
         </CardContent>
       </Card>
