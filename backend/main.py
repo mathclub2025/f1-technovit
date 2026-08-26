@@ -3,6 +3,7 @@ import time
 import asyncio
 from typing import Any, Dict, List, Optional, Set
 from collections import defaultdict
+import sqlite3
 
 from dotenv import load_dotenv
 
@@ -33,7 +34,6 @@ from models import (
     ExecuteBlockPayload,
     GodModeOverride,
     TokenPayload,
-    TeamMemberRegistration,
 
 )
 from auth import get_current_user, require_admin, get_current_user_ws
@@ -183,6 +183,16 @@ class AdminStrategyOverride(BaseModel):
     pit_lap: Optional[int] = None
     new_compound: Optional[Compound] = None
 
+class TeamMember(BaseModel):
+    name: str
+    email: str
+
+class TeamRegistration(BaseModel):
+    email: str
+    teamId: str
+    password: str
+    members: list[TeamMember]
+
 
 # -----------------------------------------------------------------------------
 # REST Endpoints
@@ -191,25 +201,27 @@ class AdminStrategyOverride(BaseModel):
 def root():
     return {"message": "F1-Technovit Race API", "status": "running"}
 
-  @app.post("/api/register")
-  async def register_team_member(payload: TeamMemberRegistration):
-      try:
-          new_id = database.register_team_member(
-              team_id=payload.team_id,
-              name=payload.name,
-              email=payload.email,
-              registration_no=payload.registration_no,
-          )
-          return {
-              "status": "ok",
-              "message": "Team member registered successfully",
-              "id": new_id,
-          }
-      except sqlite3.IntegrityError:
-          raise HTTPException(
-              status_code=status.HTTP_400_BAD_REQUEST,
-              detail="Email or registration number already exists",
-          )
+@app.post("/api/register")
+async def register_team(payload: TeamRegistration):
+    try:
+        new_id = database.queries.create_team_with_members(
+            registration_number=payload.teamId,
+            email=payload.email,
+            password=payload.password,
+            team_name=payload.teamId,
+            members=payload.members,
+        )
+        
+        return {
+            "status": "ok",
+            "message": "Team member registered successfully",
+            "id": new_id,
+        }
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email or registration number already exists",
+        )
 
 @app.post("/api/admin/init-grid")
 async def init_grid(
@@ -703,7 +715,7 @@ async def execute_block_endpoint(
 
 @app.get("/api/standings")
 async def get_standings(user: TokenPayload = Depends(get_current_user)):
-db_standings = database.get_standings()
+    db_standings = database.get_standings()
     return {
         "current_block": current_block,
         "current_lap": current_lap,
@@ -789,9 +801,3 @@ async def websocket_team(websocket: WebSocket, team_id: str, token: str = Query(
             data = await websocket.receive_text()
     except (WebSocketDisconnect, Exception):
         team_websockets[team_id].discard(websocket)
-class TeamMemberRegistration(BaseModel):
-    team_id: int
-    name: str
-    email: str
-    registration_no: str
-
