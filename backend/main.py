@@ -241,7 +241,24 @@ async def init_grid(
     window_expires_at = None
     is_executing_block = False
 
-    raw_teams = payload.teams if payload and payload.teams else _default_teams()
+    if payload and payload.teams:
+        raw_teams = payload.teams
+    else:
+        try:
+            db_teams = database.queries.get_teams()
+            if db_teams and len(db_teams) > 0:
+                raw_teams = [
+                    {
+                        "team_id": str(t.get("name", f"team_{t.get('id')}")).lower().replace(" ", "_"),
+                        "driver": t.get("name", f"Team {t.get('id')}"),
+                        "compound": Compound.MEDIUM
+                    }
+                    for t in db_teams
+                ]
+            else:
+                raw_teams = _default_teams()
+        except Exception:
+            raw_teams = _default_teams()
 
     for item in raw_teams:
         t_id = str(item.get("team_id") or item.get("id"))

@@ -59,18 +59,32 @@ export default function LoginPage() {
 
     const teamIdStr = selectedTeam.toLowerCase().replace(/[^a-z0-9]/g, '_');
     
-    // Simulate hitting a Registration API (to be fully hooked up to backend DB)
     const members = [{ name: m1Name, email: m1Email }];
     if (m2Name && m2Email) members.push({ name: m2Name, email: m2Email });
     if (m3Name && m3Email) members.push({ name: m3Name, email: m3Email });
 
-    // For now, we hit the mock-login to get the token so the UI proceeds.
-    // The backend team will replace this with their actual DB registration endpoint.
+    try {
+      // 1. Register team in SQLite database via backend API
+      await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: m1Email,
+          teamId: selectedTeam,
+          password: password,
+          members: members
+        })
+      });
+    } catch (e) {
+      // Continue to login if already exists
+    }
+
+    // 2. Obtain authenticated session token
     const res = await fetch("/api/auth/mock-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        email: `${teamIdStr}@f1.com`, 
+        email: m1Email || `${teamIdStr}@f1.com`, 
         role: "team", 
         teamId: teamIdStr,
         password: password,

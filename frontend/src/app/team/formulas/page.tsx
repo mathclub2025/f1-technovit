@@ -49,8 +49,8 @@ export default function FormulasPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {[
-              { name: "Intermediate Tire", color: "bg-green-500", formula: "T(x) = 84.00 + 0.80x" },
-              { name: "Full Wet Tire", color: "bg-blue-600", formula: "T(x) = 87.00 + 0.30x" },
+              { name: "Intermediate Tire (Green)", color: "bg-green-500", formula: "T(x) = 84.00 + 0.80x" },
+              { name: "Full Wet Tire (Blue)", color: "bg-blue-600", formula: "T(x) = 87.00 + 0.30x" },
             ].map((c) => (
               <div key={c.name} className="flex items-center justify-between px-3 py-2.5 rounded-md border text-sm">
                 <span className="flex items-center gap-2.5 font-medium">
@@ -69,6 +69,53 @@ export default function FormulasPage() {
               <p className="text-xs text-muted-foreground italic">
                 * Exception: Schumacher Rainmaster power reduces penalty to +2.00s.
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Drying Track */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sun className="h-4 w-4" /> Phase C: Drying Track (Laps 36–50)
+            </CardTitle>
+            <CardDescription>
+              Overheating degradation coefficient multiplied by 3.0 for wet compounds in drying conditions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+              { name: "Dry Slicks (Soft / Med / Hard)", color: "bg-yellow-400", formula: "Standard Dry Formulas" },
+              { name: "Intermediate Tire (Overheating)", color: "bg-green-500", formula: "T(x) = 84.00 + 2.40x" },
+              { name: "Full Wet Tire (Overheating)", color: "bg-blue-600", formula: "T(x) = 87.00 + 0.90x" },
+            ].map((c) => (
+              <div key={c.name} className="flex items-center justify-between px-3 py-2.5 rounded-md border text-sm">
+                <span className="flex items-center gap-2.5 font-medium">
+                  <span className={`size-2.5 rounded-full ${c.color}`}></span>
+                  {c.name}
+                </span>
+                <code className="font-mono text-muted-foreground">{c.formula}</code>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Pit Stop Penalties */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Pit Stop & Traffic Congestion
+            </CardTitle>
+            <CardDescription>Pit stop timing impact applied on the in-lap.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-md border text-sm">
+              <span className="font-medium">Standard Pit Stop Penalty</span>
+              <code className="font-mono text-muted-foreground">+20.00s</code>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-md border text-sm">
+              <span className="font-medium">Traffic Congestion Penalty (&ge; 4 cars on same lap)</span>
+              <code className="font-mono text-destructive-foreground">+26.00s (+6.00s traffic jam)</code>
             </div>
           </CardContent>
         </Card>

@@ -20,7 +20,7 @@ export default function TeamStrategyPage() {
     disconnect
   } = useRaceStore();
 
-  const [teamId, setTeamId] = useState<string>("team-1");
+  const [teamId, setTeamId] = useState<string>("");
   const [action, setAction] = useState<"STAY_OUT" | "PIT">("STAY_OUT");
   const [targetLap, setTargetLap] = useState<string>("");
   const [newCompound, setNewCompound] = useState<string>("");
@@ -29,14 +29,21 @@ export default function TeamStrategyPage() {
   useEffect(() => {
     const token = localStorage.getItem("race_token");
     if (token) {
+      let resolvedTeamId = "";
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.teamId) setTeamId(payload.teamId);
+        if (payload.teamId) {
+          resolvedTeamId = payload.teamId;
+          setTeamId(payload.teamId);
+        }
       } catch (e) {}
-      connectTeam(teamId, token);
+
+      if (resolvedTeamId) {
+        connectTeam(resolvedTeamId, token);
+      }
     }
     return () => disconnect();
-  }, [connectTeam, disconnect, teamId]);
+  }, [connectTeam, disconnect]);
 
   useEffect(() => {
     if (!windowOpen || !windowExpiresAt) {
