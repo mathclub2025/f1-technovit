@@ -12,10 +12,8 @@ export default function ProjectorRacePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("race_token");
-    if (token) {
-      connectRace(token);
-    }
+    const token = localStorage.getItem("race_token") || undefined;
+    connectRace(token);
     return () => disconnect();
   }, [connectRace, disconnect]);
 
@@ -97,6 +95,26 @@ export default function ProjectorRacePage() {
         )
       : null;
 
+  // Calculate authentic car coordinates (Staggered Grid on Lap 0, Oval Loop during race)
+  const getCarCoordinates = (position: number, gapToLeader: number, isPitting: boolean) => {
+    if (currentLap === 0) {
+      const slot = Math.max(0, position - 1);
+      const x = 46 - slot * 5.5;
+      const y = slot % 2 === 0 ? 8 : 14;
+      return { x: Math.max(8, x), y };
+    }
+
+    const progress = ((gapToLeader ?? 0) % 80) / 80;
+    const angle = progress * Math.PI * 2 - Math.PI / 2;
+
+    const radiusX = isPitting ? 36 : 44;
+    const radiusY = isPitting ? 26 : 38;
+
+    const x = 50 + Math.cos(angle) * radiusX;
+    const y = 50 + Math.sin(angle) * radiusY;
+    return { x, y };
+  };
+
   return (
     <div className="relative min-h-screen bg-zinc-950 text-white flex flex-col font-sans overflow-hidden select-none">
       {/* Rain Canvas Overlay */}
@@ -172,17 +190,8 @@ export default function ProjectorRacePage() {
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
               const isFastest = fastestLapTime && car?.last_lap_time && car.last_lap_time === fastestLapTime && car.last_lap_time > 0;
 
-              const colorMap: Record<string, string> = {
-                team_redbull: "#1e41ff",
-                team_mercedes: "#00d2be",
-                team_ferrari: "#dc0000",
-                team_mclaren: "#ff8700",
-                team_aston: "#006f62",
-                team_alpine: "#0090ff",
-                team_williams: "#005aff",
-                team_haas: "#ffffff",
-              };
-              const color = colorMap[s.team_id] || "#aaaaaa";
+              const defaultColors = ["#dc0000", "#1e41ff", "#00d2be", "#ff8700", "#006f62", "#0090ff", "#005aff", "#f0f0f0"];
+              const color = defaultColors[idx % defaultColors.length];
 
               const compoundColors: Record<string, string> = {
                 SOFT: "bg-red-500",
@@ -245,6 +254,9 @@ export default function ProjectorRacePage() {
                 </div>
               );
             })}
+            {standings.length === 0 && (
+              <div className="p-8 text-center text-zinc-500 font-mono text-xs">Waiting for race grid setup...</div>
+            )}
           </div>
         </div>
 
@@ -259,38 +271,20 @@ export default function ProjectorRacePage() {
             <div className="absolute top-0 right-1/2 -translate-y-1/2 w-4 h-12 bg-white/30 border-l border-r border-white/60 finish-line-pattern" />
 
             {/* Center HUD */}
-            <div className="text-center z-10">
+            <div className="text-center z-10 pointer-events-none">
               <div className="text-6xl font-black font-display tracking-tight text-white/15">LAP {currentLap}</div>
               <div className="text-xs font-mono text-zinc-500 tracking-widest uppercase mt-1">GRAND PRIX LIVE STREAM</div>
             </div>
 
             {/* Cars along track loop */}
-            {standings.map((s) => {
+            {standings.map((s, idx) => {
               const car = cars[s.team_id];
-              const gap = s.gap_to_leader;
-              const lapProportion = (gap % 80) / 80;
-              const angle = Math.PI / 2 + lapProportion * Math.PI * 2;
-
               const isPitting = s.status === "IN_PITLANE";
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
+              const { x, y } = getCarCoordinates(s.position, s.gap_to_leader, isPitting);
 
-              // If pitting, route into inner pitlane radius
-              const radiusX = isPitting ? 36 : 46;
-              const radiusY = isPitting ? 28 : 38;
-
-              const x = 50 + Math.cos(angle) * radiusX;
-              const y = 50 + Math.sin(angle) * radiusY;
-
-              const colorMap: Record<string, string> = {
-                team_redbull: "#1e41ff",
-                team_mercedes: "#00d2be",
-                team_ferrari: "#dc0000",
-                team_mclaren: "#ff8700",
-                team_aston: "#006f62",
-                team_alpine: "#0090ff",
-                team_williams: "#005aff",
-                team_haas: "#ffffff",
-              };
+              const defaultColors = ["#dc0000", "#1e41ff", "#00d2be", "#ff8700", "#006f62", "#0090ff", "#005aff", "#f0f0f0"];
+              const color = defaultColors[idx % defaultColors.length];
 
               return (
                 <div
@@ -316,7 +310,7 @@ export default function ProjectorRacePage() {
                       {isPitting && " [PIT]"}
                     </span>
                     <Formula1CarSVG
-                      color={colorMap[s.team_id] || "#aaaaaa"}
+                      color={color}
                       carNumber={s.position}
                       facing="right"
                       className="w-16 h-5"

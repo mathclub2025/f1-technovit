@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Activity, Trophy, ArrowRight, Clock } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { toast } from "sonner";
 
 export default function TeamStrategyPage() {
   const { 
@@ -58,23 +59,48 @@ export default function TeamStrategyPage() {
     return () => clearInterval(interval);
   }, [windowOpen, windowExpiresAt]);
 
+  const normalize = (id?: string) => (id || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const myCar = Object.values(cars).find(
+    c => normalize(c.team_id) === normalize(teamId) || normalize(c.driver) === normalize(teamId)
+  ) || cars[teamId];
+
+  const myStandings = standings.find(
+    s => normalize(s.team_id) === normalize(teamId) || normalize(s.driver) === normalize(teamId)
+  );
+
+  const myPos = myStandings?.position || "--";
+  const myGap = (myStandings?.gap_to_ahead ?? 0).toFixed(3);
+
   const handleSubmit = async () => {
     const token = localStorage.getItem("race_token");
+    const targetTeamId = myCar?.team_id || teamId;
     const payload = {
-      team_id: teamId,
+      team_id: targetTeamId,
+      round_number: currentBlock,
       action: action,
       pit_lap: action === "PIT" ? parseInt(targetLap) : null,
       new_compound: action === "PIT" ? newCompound : null
     };
 
-    await fetch("/api/strategy/submit", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}` 
-      },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const res = await fetch("/api/strategy/submit", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast("Strategy Locked In!", { description: `${action === "PIT" ? `Pit on Lap ${targetLap} for ${newCompound}` : "Staying Out"}` });
+      } else {
+        toast("Submission Error", { description: data.detail || "Could not submit strategy." });
+      }
+    } catch (e) {
+      toast("Network Error", { description: "Failed to reach race server." });
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -82,10 +108,6 @@ export default function TeamStrategyPage() {
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
-
-  const myCar = cars[teamId];
-  const myPos = standings.find(s => s.team_id === teamId)?.position || "--";
-  const myGap = (standings.find(s => s.team_id === teamId)?.gap_to_ahead ?? 0).toFixed(3);
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">

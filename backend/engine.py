@@ -160,16 +160,24 @@ def build_standings(cars: Dict[str, Car]) -> List[dict]:
     leader_time = ordered[0].total_race_time if ordered else 0.0
 
     standings = []
+    prev_time = leader_time
     for idx, car in enumerate(ordered, start=1):
+        gap_leader = round(car.total_race_time - leader_time, 3)
+        gap_ahead = round(car.total_race_time - prev_time, 3) if idx > 1 else 0.0
+        prev_time = car.total_race_time
+
         standings.append({
             "position": idx,
             "team_id": car.team_id,
             "driver": car.driver,
-            "compound": car.compound,
+            "compound": car.compound.value if hasattr(car.compound, "value") else str(car.compound),
             "tire_age": car.tire_age,
             "last_lap_time": round(car.last_lap_time, 3),
             "total_race_time": round(car.total_race_time, 3),
-            "interval_to_leader": round(car.total_race_time - leader_time, 3),
+            "gap_to_leader": gap_leader,
+            "gap_to_ahead": gap_ahead,
+            "interval_to_leader": gap_leader,
+            "pit_stops": car.pit_stop_count,
             "pit_stop_count": car.pit_stop_count,
             "status": car.status,
             "active_power": car.active_power if car.active_power != PowerType.NONE else None,

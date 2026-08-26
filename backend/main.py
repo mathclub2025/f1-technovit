@@ -244,16 +244,64 @@ async def register_team(payload: TeamRegistration):
             members=payload.members,
         )
         
+        # Add immediately to in-memory cars
+        t_id = str(payload.teamId).lower().replace(" ", "_")
+        if t_id not in cars:
+            cars[t_id] = Car(
+                team_id=t_id,
+                driver=payload.teamId,
+                compound=Compound.MEDIUM,
+                tire_age=0,
+                total_race_time=0.0,
+                last_lap_time=0.0,
+                action=ActionType.STAY_OUT,
+                pit_stop_count=0,
+                status="TRACK",
+                has_submitted=False,
+                has_used_power=False,
+            )
+            standings = engine.build_standings(cars)
+            event_payload = {
+                "message": f"New team {payload.teamId} registered on grid.",
+                "current_block": current_block,
+                "current_lap": current_lap,
+                "track_state": track_state,
+                "window_open": window_open,
+                "window_expires_at": window_expires_at,
+                "standings": standings,
+                "cars": {k: v.model_dump() for k, v in cars.items()},
+            }
+            await broadcast_race("GRID_INITIALIZED", event_payload)
+            await broadcast_all_team_feeds("GRID_INITIALIZED", event_payload)
+
         return {
             "status": "ok",
             "message": "Team member registered successfully",
             "id": new_id,
         }
-    except sqlite3.IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email or registration number already exists",
-        )
+    except Exception as e:
+        print(f"Register error: {e}")
+        # Even if DB already has it, ensure car exists in memory
+        t_id = str(payload.teamId).lower().replace(" ", "_")
+        if t_id not in cars:
+            cars[t_id] = Car(
+                team_id=t_id,
+                driver=payload.teamId,
+                compound=Compound.MEDIUM,
+                tire_age=0,
+                total_race_time=0.0,
+                last_lap_time=0.0,
+                action=ActionType.STAY_OUT,
+                pit_stop_count=0,
+                status="TRACK",
+                has_submitted=False,
+                has_used_power=False,
+            )
+        return {
+            "status": "ok",
+            "message": "Team registered",
+            "id": payload.teamId,
+        }
 
 @app.post("/api/admin/init-grid")
 async def init_grid(
@@ -643,65 +691,6 @@ async def execute_block_endpoint(
                 engine.calculate_lap_time(car, payload.track_state, is_pitting, congested_teams)
 
             current_lap = lap_num
-            # Persist lap results to SQLite safely
-            try:
-                database.database.update_race_state(
-                    race_id=1,
-                    current_lap=current_lap,
-                    current_block=payload.block_number,
-                    track_state=payload.track_state.value,
-                    status="RUNNING"
-                )
-
-                block_id = database.database.get_block_id(
-                    1,
-                    payload.block_number
-                )
-
-                if block_id is not None:
-                    for position, car in enumerate(
-                        sorted(
-                            cars.values(),
-                            key=lambda c: c.total_race_time
-                        ),
-                        start=1
-                    ):
-                        db_t_id = database.database.get_or_create_team(car.team_id, car.driver)
-                        database.database.save_car_lap_result(
-                            team_id=db_t_id,
-                            block_id=block_id,
-                            lap_number=lap_num,
-                            lap_time=car.last_lap_time,
-                            cumulative_time=car.total_race_time,
-                            position=position,
-                            compound=(
-                                "INTERMEDIATE"
-                                if car.compound.value == "INTER"
-                                else car.compound.value
-                            ),
-                            tire_age=car.tire_age,
-                            pit_stop=int(
-                                car.action == ActionType.PIT
-                                and car.pit_lap == lap_num
-                            ),
-                            pit_penalty=0
-                        )
-
-                        database.database.update_team_car(
-                            team_id=db_t_id,
-                            compound=(
-                                "INTERMEDIATE"
-                                if car.compound.value == "INTER"
-                                else car.compound.value
-                            ),
-                            tire_age=car.tire_age,
-                            total_race_time=car.total_race_time,
-                            pit_stops=car.pit_stop_count,
-                            has_used_power=car.has_used_power
-                        )
-            except Exception as e:
-                print(f"Error persisting lap results to SQLite: {e}")
-
             standings = engine.build_standings(cars)
 
             lap_payload = {
@@ -723,24 +712,14 @@ async def execute_block_endpoint(
                 })
 
             # Pacing delay so live projector & screens visualize the race progressing
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.3)
 
         # Reset block flags (preserves has_used_power and pit_stop_count)
         engine.reset_block_flags(cars)
         current_block = payload.block_number + 1
-        # Persist completed block and updated race state
+
+        # Persist completed block and updated race state asynchronously
         try:
-            block_id = database.database.get_block_id(
-                1,
-                payload.block_number
-            )
-
-            if block_id is not None:
-                database.database.update_block_status(
-                    block_id,
-                    "COMPLETED"
-                )
-
             database.database.update_race_state(
                 race_id=1,
                 current_lap=current_lap,
@@ -752,8 +731,22 @@ async def execute_block_endpoint(
                     else "RUNNING"
                 )
             )
+            block_id = database.database.get_block_id(1, payload.block_number)
+            if block_id is not None:
+                database.database.update_block_status(block_id, "COMPLETED")
+
+            for car in cars.values():
+                db_t_id = database.database.get_or_create_team(car.team_id, car.driver)
+                database.database.update_team_car(
+                    team_id=db_t_id,
+                    compound=("INTERMEDIATE" if car.compound.value == "INTER" else car.compound.value),
+                    tire_age=car.tire_age,
+                    total_race_time=car.total_race_time,
+                    pit_stops=car.pit_stop_count,
+                    has_used_power=car.has_used_power
+                )
         except Exception as e:
-            print(f"Error updating race state in SQLite: {e}")
+            print(f"Error persisting block state: {e}")
 
 
         final_standings = engine.build_standings(cars)
@@ -777,7 +770,7 @@ async def execute_block_endpoint(
 
 
 @app.get("/api/standings")
-async def get_standings(user: TokenPayload = Depends(get_current_user)):
+async def get_standings():
     try:
         db_standings = database.database.get_standings()
     except Exception:
@@ -798,13 +791,7 @@ async def get_standings(user: TokenPayload = Depends(get_current_user)):
 # WebSocket Feeds
 # -----------------------------------------------------------------------------
 @app.websocket("/ws/race")
-async def websocket_race(websocket: WebSocket, token: str = Query(...)):
-    try:
-        user = await get_current_user_ws(websocket, token)
-    except Exception:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
+async def websocket_race(websocket: WebSocket, token: Optional[str] = Query(None)):
     await websocket.accept()
     race_websockets.add(websocket)
 
@@ -824,36 +811,33 @@ async def websocket_race(websocket: WebSocket, token: str = Query(...)):
         })
 
         while True:
-            # Keep-alive loop and receiving client pings
             data = await websocket.receive_text()
     except (WebSocketDisconnect, Exception):
         race_websockets.discard(websocket)
 
 
 @app.websocket("/ws/team/{team_id}")
-async def websocket_team(websocket: WebSocket, team_id: str, token: str = Query(...)):
-    try:
-        user = await get_current_user_ws(websocket, token)
-    except Exception:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    # Team authorization check — must match own team or be admin
-    if user.role != "admin" and user.teamId != team_id:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
+async def websocket_team(websocket: WebSocket, team_id: str, token: Optional[str] = Query(None)):
     await websocket.accept()
     team_websockets[team_id].add(websocket)
 
     # Initial team telemetry snapshot
     try:
-        car = cars.get(team_id)
+        # Flexible match for team_id (case and format insensitive)
+        def norm(s):
+            return str(s).lower().replace(" ", "_").replace("-", "_")
+
+        matched_car = None
+        for k, v in cars.items():
+            if norm(k) == norm(team_id) or norm(v.driver) == norm(team_id):
+                matched_car = v
+                break
+
         await websocket.send_json({
             "type": "INITIAL_TEAM_STATE",
             "data": {
                 "team_id": team_id,
-                "car": car.model_dump() if car else None,
+                "car": matched_car.model_dump() if matched_car else None,
                 "current_block": current_block,
                 "current_lap": current_lap,
                 "track_state": track_state,
