@@ -342,3 +342,14 @@ def save_car_lap_result(
     update_lap_status(lap_id, "COMPLETED")
 
     return result_id
+def register_team_member(team_id, name, email, registration_no):
+    return execute("""
+        INSERT INTO team_members (
+            team_id,
+            name,
+            email,
+            registration_no
+        )
+        VALUES (?, ?, ?, ?)
+    """, (team_id, name, email, registration_no))
+
