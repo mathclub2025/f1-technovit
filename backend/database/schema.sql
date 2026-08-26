@@ -215,6 +215,21 @@ ON strategy_submissions(block_id);
 CREATE INDEX idx_results_team
 ON lap_results(team_id);
 
+-- ==========================================
+-- TEAM MEMBERS
+-- ==========================================
+
+CREATE TABLE team_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    registration_no TEXT NOT NULL UNIQUE,
+
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+
 CREATE INDEX idx_results_lap
 ON lap_results(lap_id);
 
