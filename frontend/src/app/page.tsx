@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Shield } from "lucide-react";
 
 export default function LoginPage() {
   const [view, setView] = useState<"LOGIN" | "ADMIN" | "SIGNUP">("LOGIN");
@@ -110,8 +111,8 @@ export default function LoginPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
         email: "admin@technovit.com", 
-        role: "admin",
-        password: password
+        role: "admin", 
+        password: password 
       })
     });
     const data = await res.json();
@@ -128,11 +129,29 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-900/20 via-[#111111] to-[#111111]" />
       <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:32px_32px]" />
 
-      {/* Secret Admin Button Corner */}
-      <div 
-        className="absolute top-0 right-0 w-16 h-16 cursor-default z-50"
-        onDoubleClick={() => setView("ADMIN")}
-      ></div>
+      {/* Top Right Admin / Team Toggle */}
+      <div className="absolute top-5 right-5 z-50">
+        {view === "ADMIN" ? (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setView("LOGIN")} 
+            className="bg-black/60 border-white/15 text-zinc-300 hover:text-white hover:bg-zinc-900 text-xs font-mono backdrop-blur-md shadow-lg"
+          >
+            ← Team Pit Wall
+          </Button>
+        ) : (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setView("ADMIN")} 
+            className="bg-black/60 border-white/15 text-zinc-300 hover:text-white hover:bg-zinc-900 text-xs font-mono backdrop-blur-md shadow-lg flex items-center gap-1.5"
+          >
+            <Shield className="h-3.5 w-3.5 text-red-500" />
+            Sign in as Admin
+          </Button>
+        )}
+      </div>
 
       <div className="relative z-10 w-full max-w-md p-8 flex flex-col items-center">
         <div className="mb-8 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
