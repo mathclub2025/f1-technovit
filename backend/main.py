@@ -33,6 +33,8 @@ from models import (
     ExecuteBlockPayload,
     GodModeOverride,
     TokenPayload,
+    TeamMemberRegistration,
+
 )
 from auth import get_current_user, require_admin, get_current_user_ws
 
@@ -189,6 +191,25 @@ class AdminStrategyOverride(BaseModel):
 def root():
     return {"message": "F1-Technovit Race API", "status": "running"}
 
+  @app.post("/api/register")
+  async def register_team_member(payload: TeamMemberRegistration):
+      try:
+          new_id = database.register_team_member(
+              team_id=payload.team_id,
+              name=payload.name,
+              email=payload.email,
+              registration_no=payload.registration_no,
+          )
+          return {
+              "status": "ok",
+              "message": "Team member registered successfully",
+              "id": new_id,
+          }
+      except sqlite3.IntegrityError:
+          raise HTTPException(
+              status_code=status.HTTP_400_BAD_REQUEST,
+              detail="Email or registration number already exists",
+          )
 
 @app.post("/api/admin/init-grid")
 async def init_grid(
@@ -768,3 +789,9 @@ async def websocket_team(websocket: WebSocket, team_id: str, token: str = Query(
             data = await websocket.receive_text()
     except (WebSocketDisconnect, Exception):
         team_websockets[team_id].discard(websocket)
+class TeamMemberRegistration(BaseModel):
+    team_id: int
+    name: str
+    email: str
+    registration_no: str
+
