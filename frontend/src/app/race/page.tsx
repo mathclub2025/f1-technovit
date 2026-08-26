@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRaceStore } from "@/lib/race-store";
 import { Formula1CarSVG } from "@/components/race/formula1-car-svg";
@@ -157,6 +157,69 @@ export default function ProjectorRacePage() {
             .filter((t): t is number => typeof t === "number" && t > 0)
         )
       : null;
+
+  // Dynamic Live Telemetry Engine (Calculates gaps and cumulative times in real-time)
+  const displayStandings = useMemo(() => {
+    if (!isRacing || standings.length === 0) {
+      return standings;
+    }
+
+    const blockStartLap = blockStartLapRef.current;
+    const blockLapsCount = 5;
+
+    // Calculate live running metrics per car
+    const liveCars = standings.map((s, initialPos) => {
+      const car = cars[s.team_id];
+      const lapTime = car?.last_lap_time && car.last_lap_time > 0 ? car.last_lap_time : 80;
+      const speedRatio = 80 / Math.max(65, lapTime);
+      const gapOffset = initialPos * 0.04;
+      const carLapDistance = Math.max(0, simLapProgress * speedRatio - gapOffset);
+      const carCurrentLap = blockStartLap + Math.min(4, Math.floor(simLapProgress));
+      
+      const isPitting = Boolean(
+        car?.action === "PIT" && car?.pit_lap === carCurrentLap
+      );
+
+      // Total time before this block started
+      const prevBlockTime = Math.max(0, (s.total_race_time ?? 0) - (blockLapsCount * lapTime));
+      
+      // Live distance calculation: frozen in pit box during pit stop
+      const lapFraction = carLapDistance % 1;
+      let effectiveDistance = carLapDistance;
+      if (isPitting && lapFraction >= 0.25 && lapFraction < 0.75) {
+        const lapInt = Math.floor(carLapDistance);
+        effectiveDistance = lapInt + 0.25;
+      }
+      
+      const liveRunningTime = prevBlockTime + (simLapProgress * lapTime);
+
+      return {
+        ...s,
+        liveDistance: effectiveDistance,
+        liveTotalTime: liveRunningTime,
+        isPittingThisLap: isPitting
+      };
+    });
+
+    // Sort live cars by on-track progress
+    liveCars.sort((a, b) => b.liveDistance - a.liveDistance);
+
+    const leader = liveCars[0];
+    const leaderDistance = leader.liveDistance;
+
+    return liveCars.map((c, idx) => {
+      const distanceDeficit = Math.max(0, leaderDistance - c.liveDistance);
+      // Convert on-track distance deficit into live seconds gap (1 full lap ~80s)
+      const liveGapToLeader = distanceDeficit * 80;
+      
+      return {
+        ...c,
+        position: idx + 1,
+        gap_to_leader: idx === 0 ? 0 : liveGapToLeader,
+        total_race_time: c.liveTotalTime,
+      };
+    });
+  }, [isRacing, simLapProgress, standings, cars]);
 
   // Exact Stadium Circuit Parametric Trajectory with Tangent Heading Angle
   const getCarTrackTransform = (teamId: string, position: number) => {
@@ -339,9 +402,9 @@ export default function ProjectorRacePage() {
           </div>
 
           <div className="p-2 space-y-1 overflow-y-auto">
-            {standings.map((s, idx) => {
+            {displayStandings.map((s, idx) => {
               const car = cars[s.team_id];
-              const isPitting = s.status === "IN_PITLANE";
+              const isPitting = s.status === "IN_PITLANE" || (s as any).isPittingThisLap;
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
               const isFastest = fastestLapTime && car?.last_lap_time && car.last_lap_time === fastestLapTime && car.last_lap_time > 0;
 
@@ -414,7 +477,7 @@ export default function ProjectorRacePage() {
                 </div>
               );
             })}
-            {standings.length === 0 && (
+            {displayStandings.length === 0 && (
               <div className="p-4 text-center text-zinc-500 font-mono text-xs">Waiting for race grid setup...</div>
             )}
           </div>
@@ -446,7 +509,7 @@ export default function ProjectorRacePage() {
             </div>
 
             {/* Cars along track loop with smooth motion and rotation */}
-            {standings.map((s, idx) => {
+            {displayStandings.map((s, idx) => {
               const car = cars[s.team_id];
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
               const { x, y, angle, isPitting, isStoppedInPit } = getCarTrackTransform(s.team_id, s.position);
