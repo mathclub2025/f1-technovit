@@ -176,7 +176,7 @@ export default function ProjectorRacePage() {
       const slot = Math.max(0, position - 1);
       const gridX = 47 - slot * 6.5; // Spaced 6.5% apart with zero overlap
       const gridY = slot % 2 === 0 ? 10 : 15;
-      return { x: Math.max(6, gridX), y: gridY, angle: 0, isPitting: false };
+      return { x: Math.max(6, gridX), y: gridY, angle: 0, isPitting: false, isStoppedInPit: false };
     }
 
     // Dynamic pace & gradual distance separation
@@ -192,7 +192,25 @@ export default function ProjectorRacePage() {
     const arcLength = Math.PI * 32;
     const totalPerimeter = straightLength + arcLength + straightLength + arcLength;
 
-    const d = lapFraction * totalPerimeter;
+    // Pit Stop Stop-and-Go: During pit lap, car stops in pit box between 25% and 75% of lap progress
+    let effectiveLapFraction = lapFraction;
+    let isStoppedInPit = false;
+
+    if (isPitting) {
+      if (lapFraction >= 0.25 && lapFraction < 0.75) {
+        // Full stop inside pit box!
+        isStoppedInPit = true;
+        return { x: 50, y: 22, angle: 0, isPitting: true, isStoppedInPit: true };
+      } else if (lapFraction < 0.25) {
+        // Entering pit lane towards pit box
+        effectiveLapFraction = (lapFraction / 0.25) * 0.15;
+      } else {
+        // Exiting pit lane back onto racing line
+        effectiveLapFraction = 0.15 + ((lapFraction - 0.75) / 0.25) * 0.85;
+      }
+    }
+
+    const d = effectiveLapFraction * totalPerimeter;
 
     const topY = isPitting ? 22 : 10;
     const botY = isPitting ? 78 : 90;
@@ -202,7 +220,7 @@ export default function ProjectorRacePage() {
     // Segment 1: Top Straight (Finish line 50% -> 69%)
     if (d < straightLength / 2) {
       const x = 50 + d;
-      return { x, y: topY, angle: 0, isPitting };
+      return { x, y: topY, angle: 0, isPitting, isStoppedInPit };
     }
 
     // Segment 2: Right Turn (69% Top -> 69% Bottom)
@@ -213,14 +231,14 @@ export default function ProjectorRacePage() {
       const x = rightCenter + cornerRadiusX * Math.cos(theta);
       const y = 50 + cornerRadiusY * Math.sin(theta);
       const heading = (u * 180);
-      return { x, y, angle: heading, isPitting };
+      return { x, y, angle: heading, isPitting, isStoppedInPit };
     }
 
     // Segment 3: Bottom Straight (69% -> 31%)
     const seg3Start = seg2Start + arcLength;
     if (d < seg3Start + straightLength) {
       const x = rightCenter - (d - seg3Start);
-      return { x, y: botY, angle: 180, isPitting };
+      return { x, y: botY, angle: 180, isPitting, isStoppedInPit };
     }
 
     // Segment 4: Left Turn (31% Bottom -> 31% Top)
@@ -231,13 +249,13 @@ export default function ProjectorRacePage() {
       const x = leftCenter + cornerRadiusX * Math.cos(theta);
       const y = 50 + cornerRadiusY * Math.sin(theta);
       const heading = 180 + (u * 180);
-      return { x, y, angle: heading, isPitting };
+      return { x, y, angle: heading, isPitting, isStoppedInPit };
     }
 
     // Segment 5: Top Straight (31% -> 50% Finish Line)
     const seg5Start = seg4Start + arcLength;
     const x = leftCenter + (d - seg5Start);
-    return { x, y: topY, angle: 0, isPitting };
+    return { x, y: topY, angle: 0, isPitting, isStoppedInPit };
   };
 
   return (
@@ -409,6 +427,11 @@ export default function ProjectorRacePage() {
             {/* Inner Pit Lane Box Route */}
             <div className="absolute inset-[20px] rounded-[110px] border-2 border-dashed border-amber-500/35 pointer-events-none" />
 
+            {/* Pit Box Station Marker */}
+            <div className="absolute top-[22%] left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-[8px] font-mono font-black text-amber-400 tracking-widest pointer-events-none z-10">
+              PIT BOX
+            </div>
+
             {/* Finish Line (Top Straight at 50%) */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-12 bg-white/40 border-l-2 border-r-2 border-white/70 finish-line-pattern z-10" />
 
@@ -426,7 +449,7 @@ export default function ProjectorRacePage() {
             {standings.map((s, idx) => {
               const car = cars[s.team_id];
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
-              const { x, y, angle, isPitting } = getCarTrackTransform(s.team_id, s.position);
+              const { x, y, angle, isPitting, isStoppedInPit } = getCarTrackTransform(s.team_id, s.position);
 
               const defaultColors = ["#dc0000", "#1e41ff", "#00d2be", "#ff8700", "#006f62", "#0090ff", "#005aff", "#f0f0f0"];
               const color = defaultColors[idx % defaultColors.length];
@@ -446,7 +469,9 @@ export default function ProjectorRacePage() {
                     <span
                       style={{ transform: `rotate(${-angle}deg)` }}
                       className={`px-1.5 py-0.5 rounded text-[8px] font-bold border mb-1 whitespace-nowrap shadow-md transition-transform ${
-                        isHammertime
+                        isStoppedInPit
+                          ? "bg-amber-500 text-black border-amber-300 font-black animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.8)]"
+                          : isHammertime
                           ? "bg-purple-900/90 text-purple-200 border-purple-400"
                           : isPitting
                           ? "bg-amber-950/90 text-amber-300 border-amber-500 animate-bounce"
@@ -454,14 +479,18 @@ export default function ProjectorRacePage() {
                       }`}
                     >
                       P{s.position} {s.driver.split(" ")[1] || s.driver}
-                      {isPitting && ` [PIT: ${car?.next_compound || "TIRES"}]`}
+                      {isStoppedInPit
+                        ? ` [🛑 PIT STOP: CHANGING TIRES...]`
+                        : isPitting
+                        ? ` [PIT: ${car?.next_compound || "TIRES"}]`
+                        : ""}
                     </span>
                     <Formula1CarSVG
                       color={color}
                       carNumber={s.position}
                       facing="right"
                       className="w-16 h-5"
-                      glow={!isPitting || isHammertime}
+                      glow={!isPitting || isHammertime || isStoppedInPit}
                     />
                   </div>
                 </div>
