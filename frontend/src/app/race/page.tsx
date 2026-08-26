@@ -372,13 +372,24 @@ export default function ProjectorRacePage() {
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end">
                     <div className="font-mono font-bold text-xs">
-                      {idx === 0 ? "LEADER" : `+${(s.gap_to_leader ?? 0).toFixed(3)}s`}
+                      {idx === 0 ? (
+                        <span className="text-emerald-400 font-black">LEADER</span>
+                      ) : (
+                        <span className="text-white">+{Number(s.gap_to_leader ?? 0).toFixed(3)}s</span>
+                      )}
                     </div>
-                    <div className="font-mono text-[9px] text-zinc-400 flex items-center justify-end gap-1 mt-0.5">
-                      <span className={isHammertime ? "text-purple-400 font-bold" : isFastest ? "text-emerald-400 font-bold" : ""}>
-                        {(car?.last_lap_time ?? 0).toFixed(3)}s
+                    <div className="font-mono text-[9px] text-zinc-400 flex items-center justify-end gap-1.5 mt-0.5">
+                      <span className="text-zinc-400" title="Total Cumulative Race Time">
+                        Tot: <strong className="text-zinc-200">{Number(s.total_race_time ?? 0).toFixed(1)}s</strong>
+                      </span>
+                      <span className="text-zinc-500">&bull;</span>
+                      <span 
+                        className={isFastest ? "text-purple-400 font-bold" : isHammertime ? "text-purple-400 font-bold" : "text-zinc-400"}
+                        title="Last Lap Time"
+                      >
+                        Lap: {Number(car?.last_lap_time ?? 0).toFixed(1)}s{isFastest ? "⚡" : ""}
                       </span>
                     </div>
                   </div>
