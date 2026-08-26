@@ -1,4 +1,7 @@
-from database.database import get_connection
+try:
+    from .database import get_connection
+except ImportError:
+    from database.database import get_connection
 
 
 def fetch_all(query, params=()):

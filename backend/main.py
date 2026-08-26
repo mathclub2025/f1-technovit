@@ -266,6 +266,11 @@ async def init_grid(
             has_submitted=False,
             has_used_power=False,
         )
+        try:
+            database.database.init_race_schema(1, 50, 10)
+            database.database.get_or_create_team(t_id, driver)
+        except Exception as e:
+            print(f"Error initializing team in database: {e}")
 
     standings = engine.build_standings(cars)
     event_data = {
@@ -345,21 +350,24 @@ async def submit_strategy(
         car.pit_lap = None
         car.next_compound = None
     car.has_submitted = True
-# Persist strategy submission to SQLite
-    block_id = database.get_block_id(1, current_block)
-
-    if block_id is not None:
-        database.save_strategy(
-            team_id=int(submission.team_id),
-            block_id=block_id,
-            action=submission.action.value,
-            pit_lap=submission.pit_lap,
-            new_compound=(
-                submission.new_compound.value
-                if submission.new_compound
-                else None
+    # Persist strategy submission to SQLite
+    try:
+        block_id = database.database.get_block_id(1, current_block)
+        if block_id is not None:
+            db_team_id = database.database.get_or_create_team(submission.team_id)
+            database.database.save_strategy(
+                team_id=db_team_id,
+                block_id=block_id,
+                action=submission.action.value,
+                pit_lap=submission.pit_lap,
+                new_compound=(
+                    submission.new_compound.value
+                    if submission.new_compound
+                    else None
+                )
             )
-        )
+    except Exception as e:
+        print(f"Error persisting strategy to SQLite: {e}")
 
 
     event_data = {
@@ -586,61 +594,64 @@ async def execute_block_endpoint(
                 engine.calculate_lap_time(car, payload.track_state, is_pitting, congested_teams)
 
             current_lap = lap_num
-# Persist current race state
-            database.update_race_state(
-                race_id=1,
-                current_lap=current_lap,
-                current_block=payload.block_number,
-                track_state=payload.track_state.value,
-                status="RUNNING"
-            )
+            # Persist lap results to SQLite safely
+            try:
+                database.database.update_race_state(
+                    race_id=1,
+                    current_lap=current_lap,
+                    current_block=payload.block_number,
+                    track_state=payload.track_state.value,
+                    status="RUNNING"
+                )
 
-            # Persist lap results to SQLite
-            block_id = database.get_block_id(
-                1,
-                payload.block_number
-            )
+                block_id = database.database.get_block_id(
+                    1,
+                    payload.block_number
+                )
 
-            if block_id is not None:
-                for position, car in enumerate(
-                    sorted(
-                        cars.values(),
-                        key=lambda c: c.total_race_time
-                    ),
-                    start=1
-                ):
-                    database.save_car_lap_result(
-                        team_id=int(car.team_id),
-                        block_id=block_id,
-                        lap_number=lap_num,
-                        lap_time=car.last_lap_time,
-                        cumulative_time=car.total_race_time,
-                        position=position,
-                        compound=(
-                            "INTERMEDIATE"
-                            if car.compound.value == "INTER"
-                            else car.compound.value
+                if block_id is not None:
+                    for position, car in enumerate(
+                        sorted(
+                            cars.values(),
+                            key=lambda c: c.total_race_time
                         ),
-                        tire_age=car.tire_age,
-                        pit_stop=int(
-                            car.action == ActionType.PIT
-                            and car.pit_lap == lap_num
-                        ),
-                        pit_penalty=0
-                    )
+                        start=1
+                    ):
+                        db_t_id = database.database.get_or_create_team(car.team_id, car.driver)
+                        database.database.save_car_lap_result(
+                            team_id=db_t_id,
+                            block_id=block_id,
+                            lap_number=lap_num,
+                            lap_time=car.last_lap_time,
+                            cumulative_time=car.total_race_time,
+                            position=position,
+                            compound=(
+                                "INTERMEDIATE"
+                                if car.compound.value == "INTER"
+                                else car.compound.value
+                            ),
+                            tire_age=car.tire_age,
+                            pit_stop=int(
+                                car.action == ActionType.PIT
+                                and car.pit_lap == lap_num
+                            ),
+                            pit_penalty=0
+                        )
 
-                    database.update_team_car(
-                        team_id=int(car.team_id),
-                        compound=(
-                            "INTERMEDIATE"
-                            if car.compound.value == "INTER"
-                            else car.compound.value
-                        ),
-                        tire_age=car.tire_age,
-                        total_race_time=car.total_race_time,
-                        pit_stops=car.pit_stop_count,
-                        has_used_power=car.has_used_power
-                    )
+                        database.database.update_team_car(
+                            team_id=db_t_id,
+                            compound=(
+                                "INTERMEDIATE"
+                                if car.compound.value == "INTER"
+                                else car.compound.value
+                            ),
+                            tire_age=car.tire_age,
+                            total_race_time=car.total_race_time,
+                            pit_stops=car.pit_stop_count,
+                            has_used_power=car.has_used_power
+                        )
+            except Exception as e:
+                print(f"Error persisting lap results to SQLite: {e}")
 
             standings = engine.build_standings(cars)
 
@@ -668,29 +679,32 @@ async def execute_block_endpoint(
         # Reset block flags (preserves has_used_power and pit_stop_count)
         engine.reset_block_flags(cars)
         current_block = payload.block_number + 1
-# Persist completed block and updated race state
-        block_id = database.get_block_id(
-            1,
-            payload.block_number
-        )
-
-        if block_id is not None:
-            database.update_block_status(
-                block_id,
-                "COMPLETED"
+        # Persist completed block and updated race state
+        try:
+            block_id = database.database.get_block_id(
+                1,
+                payload.block_number
             )
 
-        database.update_race_state(
-            race_id=1,
-            current_lap=current_lap,
-            current_block=current_block,
-            track_state=track_state.value,
-            status=(
-                "COMPLETED"
-                if current_lap >= 50
-                else "RUNNING"
+            if block_id is not None:
+                database.database.update_block_status(
+                    block_id,
+                    "COMPLETED"
+                )
+
+            database.database.update_race_state(
+                race_id=1,
+                current_lap=current_lap,
+                current_block=current_block,
+                track_state=track_state.value,
+                status=(
+                    "COMPLETED"
+                    if current_lap >= 50
+                    else "RUNNING"
+                )
             )
-        )
+        except Exception as e:
+            print(f"Error updating race state in SQLite: {e}")
 
 
         final_standings = engine.build_standings(cars)
@@ -715,7 +729,10 @@ async def execute_block_endpoint(
 
 @app.get("/api/standings")
 async def get_standings(user: TokenPayload = Depends(get_current_user)):
-    db_standings = database.get_standings()
+    try:
+        db_standings = database.database.get_standings()
+    except Exception:
+        db_standings = []
     return {
         "current_block": current_block,
         "current_lap": current_lap,

@@ -4,7 +4,7 @@ from fastapi import Header, HTTPException, WebSocket, WebSocketException, status
 from jose import JWTError, jwt
 from models import TokenPayload
 
-SECRET = os.environ["SHARED_JWT_SECRET"]
+SECRET = os.getenv("SHARED_JWT_SECRET", "technovit_f1_shared_jwt_secret_key_2026")
 ALGORITHM = "HS256"
 
 def _decode(token: str) -> TokenPayload:

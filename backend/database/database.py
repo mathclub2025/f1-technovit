@@ -353,3 +353,76 @@ def register_team_member(team_id, name, email, registration_no):
         VALUES (?, ?, ?, ?)
     """, (team_id, name, email, registration_no))
 
+
+def init_race_schema(race_id=1, total_laps=50, total_blocks=10):
+    """Ensures a race record with its blocks and laps exists in SQLite."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM races WHERE id = ?", (race_id,))
+        if not cursor.fetchone():
+            cursor.execute(
+                """
+                INSERT INTO races (id, name, total_laps, total_blocks, current_lap, current_block, track_state, status)
+                VALUES (?, 'F1 Technovit Grand Prix', ?, ?, 0, 1, 'DRY', 'UPCOMING')
+                """,
+                (race_id, total_laps, total_blocks)
+            )
+            for b in range(1, total_blocks + 1):
+                start_l = (b - 1) * 5 + 1
+                end_l = b * 5
+                cursor.execute(
+                    """
+                    INSERT INTO blocks (race_id, block_number, start_lap, end_lap, status)
+                    VALUES (?, ?, ?, ?, 'LOCKED')
+                    """,
+                    (race_id, b, start_l, end_l)
+                )
+                block_id = cursor.lastrowid
+                for l in range(start_l, end_l + 1):
+                    cursor.execute(
+                        """
+                        INSERT INTO laps (block_id, lap_number, status)
+                        VALUES (?, ?, 'LOCKED')
+                        """,
+                        (block_id, l)
+                    )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_or_create_team(team_id_str: str, driver_name: str = "") -> int:
+    """Safely retrieves or inserts team into SQLite and returns its integer ID."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        # If already a number
+        if str(team_id_str).isdigit():
+            t_id = int(team_id_str)
+            cursor.execute("SELECT id FROM teams WHERE id = ?", (t_id,))
+            if cursor.fetchone():
+                return t_id
+
+        # Lookup by name
+        cursor.execute("SELECT id FROM teams WHERE name = ?", (str(team_id_str),))
+        row = cursor.fetchone()
+        if row:
+            return row["id"]
+
+        # Insert new team
+        cursor.execute("INSERT INTO teams (name, color) VALUES (?, '#ffffff')", (str(team_id_str),))
+        new_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO team_cars (team_id, compound, tire_age, total_race_time, vehicle_health, pit_stops, has_used_power)
+            VALUES (?, 'MEDIUM', 0, 0.0, 100.0, 0, 0)
+            """,
+            (new_id,)
+        )
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
+
+
