@@ -4,7 +4,15 @@ import { SignJWT } from "jose";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, role, teamId } = body;
+    const { email, role, teamId, password } = body;
+
+    // Verify Admin Password
+    if (role === "admin") {
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!adminPassword || password !== adminPassword) {
+        return NextResponse.json({ error: "Invalid admin password" }, { status: 401 });
+      }
+    }
 
     const secret = process.env.SHARED_JWT_SECRET;
     if (!secret) {

@@ -126,7 +126,7 @@ export default function AdminOverviewPage() {
               title="Comma-separated list of team names formed today"
             />
             <Button onClick={handleInitGrid} variant="outline" size="sm" className="gap-1.5">
-              <Flag className="h-3.5 w-3.5" /> Init Grid
+              <Flag className="h-3.5 w-3.5" /> Setup Race Grid
             </Button>
             <Button onClick={handleStartWindow} variant="secondary" size="sm" className="gap-1.5" disabled={windowOpen}>
               <Play className="h-3.5 w-3.5" /> Start Window
@@ -216,7 +216,7 @@ export default function AdminOverviewPage() {
                 ))}
                 {activeTeamsCount === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-6 text-muted-foreground">Grid not initialized. Click Init Grid.</td>
+                    <td colSpan={6} className="text-center py-6 text-muted-foreground">Grid not set up. Click Setup Race Grid.</td>
                   </tr>
                 )}
               </tbody>

@@ -12,6 +12,15 @@ export default function LoginPage() {
   const [view, setView] = useState<"LOGIN" | "ADMIN">("LOGIN");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [password, setPassword] = useState("");
+  
+  // Registration state
+  const [m1Name, setM1Name] = useState("");
+  const [m1Email, setM1Email] = useState("");
+  const [m2Name, setM2Name] = useState("");
+  const [m2Email, setM2Email] = useState("");
+  const [m3Name, setM3Name] = useState("");
+  const [m3Email, setM3Email] = useState("");
+
   const router = useRouter();
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -25,31 +34,78 @@ export default function LoginPage() {
     const res = await fetch("/api/auth/mock-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: `${teamIdStr}@f1.com`, role: "team", teamId: teamIdStr })
+      body: JSON.stringify({ 
+        email: `${teamIdStr}@f1.com`, 
+        role: "team", 
+        teamId: teamIdStr,
+        password: password 
+      })
     });
     const data = await res.json();
     if (data.token) {
       localStorage.setItem("race_token", data.token);
       router.push("/team");
+    } else {
+      toast("Error", { description: data.error || "Authentication failed." });
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTeam || !password || !m1Name || !m1Email) {
+      toast("Error", { description: "Team Name, Password, and Captain details are required." });
+      return;
+    }
+
+    const teamIdStr = selectedTeam.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    // Simulate hitting a Registration API (to be fully hooked up to backend DB)
+    const members = [{ name: m1Name, email: m1Email }];
+    if (m2Name && m2Email) members.push({ name: m2Name, email: m2Email });
+    if (m3Name && m3Email) members.push({ name: m3Name, email: m3Email });
+
+    // For now, we hit the mock-login to get the token so the UI proceeds.
+    // The backend team will replace this with their actual DB registration endpoint.
+    const res = await fetch("/api/auth/mock-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        email: `${teamIdStr}@f1.com`, 
+        role: "team", 
+        teamId: teamIdStr,
+        password: password,
+        members: members
+      })
+    });
+    
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem("race_token", data.token);
+      localStorage.setItem("team_members", JSON.stringify(members));
+      router.push("/team");
+    } else {
+      toast("Error", { description: data.error || "Registration failed." });
     }
   };
 
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== "admin-2025") {
-      toast("Error", { description: "Invalid admin password." });
-      return;
-    }
 
     const res = await fetch("/api/auth/mock-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "admin@technovit.com", role: "admin" })
+      body: JSON.stringify({ 
+        email: "admin@technovit.com", 
+        role: "admin",
+        password: password
+      })
     });
     const data = await res.json();
     if (data.token) {
       localStorage.setItem("race_token", data.token);
       router.push("/admin");
+    } else {
+      toast("Error", { description: data.error || "Authentication failed." });
     }
   };
 
@@ -117,6 +173,63 @@ export default function LoginPage() {
                 
                 <Button type="submit" disabled={!selectedTeam || !password} className="w-full h-11 bg-white text-black hover:bg-gray-200 mt-2 font-bold transition-all shadow-md">
                   Connect Telemetry
+                </Button>
+                <div className="text-center mt-4">
+                  <span className="text-gray-400 text-sm">New team?</span>
+                  <Button variant="link" type="button" onClick={() => setView("SIGNUP")} className="text-red-500 font-bold ml-1 px-1">
+                    Register Here
+                  </Button>
+                </div>
+              </form>
+            </div>
+          ) : view === "SIGNUP" ? (
+            <div className="space-y-6">
+              <div className="space-y-2 text-center">
+                <h2 className="text-xl font-bold tracking-tight text-white">Team Registration</h2>
+                <p className="text-xs text-gray-400">Register 1 to 3 members for your constructor.</p>
+              </div>
+
+              <form onSubmit={handleRegisterSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Team Name *</Label>
+                    <Input required value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)} placeholder="e.g. Scuderia Ferrari" className="bg-black/50 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Password *</Label>
+                    <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create password" className="bg-black/50 border-white/10 text-white" />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/10">
+                  <Label className="text-red-500 font-bold mb-2 block">Captain (Required)</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input required value={m1Name} onChange={(e) => setM1Name(e.target.value)} placeholder="Name" className="bg-black/50 border-white/10 text-white" />
+                    <Input required type="email" value={m1Email} onChange={(e) => setM1Email(e.target.value)} placeholder="Email" className="bg-black/50 border-white/10 text-white" />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Label className="text-gray-400 font-semibold mb-2 block">Teammate 2 (Optional)</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input value={m2Name} onChange={(e) => setM2Name(e.target.value)} placeholder="Name" className="bg-black/50 border-white/10 text-white" />
+                    <Input type="email" value={m2Email} onChange={(e) => setM2Email(e.target.value)} placeholder="Email" className="bg-black/50 border-white/10 text-white" />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Label className="text-gray-400 font-semibold mb-2 block">Teammate 3 (Optional)</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input value={m3Name} onChange={(e) => setM3Name(e.target.value)} placeholder="Name" className="bg-black/50 border-white/10 text-white" />
+                    <Input type="email" value={m3Email} onChange={(e) => setM3Email(e.target.value)} placeholder="Email" className="bg-black/50 border-white/10 text-white" />
+                  </div>
+                </div>
+                
+                <Button type="submit" disabled={!selectedTeam || !password || !m1Name || !m1Email} className="w-full h-11 bg-white text-black hover:bg-gray-200 mt-4 font-bold transition-all shadow-md">
+                  Register & Enter Pit Wall
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setView("LOGIN")} className="w-full text-gray-400 hover:text-white mt-1">
+                  Back to Login
                 </Button>
               </form>
             </div>
