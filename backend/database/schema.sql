@@ -224,7 +224,7 @@ CREATE TABLE team_members (
     team_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    reg_no TEXT NOT NULL UNIQUE,
+    registration_no TEXT NOT NULL UNIQUE,
 
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
