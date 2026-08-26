@@ -7,9 +7,14 @@ import { Formula1CarSVG } from "@/components/race/formula1-car-svg";
 import { AlertTriangle, CloudRain, Sun, Zap, Shield, Hammer, CloudDrizzle, Settings } from "lucide-react";
 
 export default function ProjectorRacePage() {
-  const { currentLap, currentBlock, trackState, standings, cars, connectRace, disconnect } = useRaceStore();
+  const { currentLap, currentBlock, trackState, standings, cars, lastEvent, connectRace, disconnect } = useRaceStore();
   const [congested, setCongested] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [isRacing, setIsRacing] = useState(false);
+  const [carProgress, setCarProgress] = useState<Record<string, number>>({});
+  const lastLapRef = useRef(currentLap);
+  const animFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("race_token") || undefined;
@@ -26,6 +31,61 @@ export default function ProjectorRacePage() {
       return () => clearTimeout(timer);
     }
   }, [standings]);
+
+  // Detect when block execution is actively progressing laps
+  useEffect(() => {
+    if (currentLap > lastLapRef.current) {
+      setIsRacing(true);
+      lastLapRef.current = currentLap;
+    }
+  }, [currentLap]);
+
+  // When block finishes or window opens, transition smoothly back to starting grid
+  useEffect(() => {
+    if (lastEvent === "BLOCK_COMPLETED" || lastEvent === "WINDOW_START" || lastEvent === "GRID_INITIALIZED") {
+      const timeout = setTimeout(() => {
+        setIsRacing(false);
+      }, 1500);
+      return () => clearTimeout(timeout);
+    }
+  }, [lastEvent]);
+
+  // Continuous 60fps Physics & Rotation Animation Loop
+  useEffect(() => {
+    let prevTimestamp: number | null = null;
+
+    const animateRace = (timestamp: number) => {
+      if (!prevTimestamp) prevTimestamp = timestamp;
+      const dt = Math.min((timestamp - prevTimestamp) / 1000, 0.05);
+      prevTimestamp = timestamp;
+
+      if (isRacing && standings.length > 0) {
+        setCarProgress((prev) => {
+          const next = { ...prev };
+          const leaderTime = standings[0]?.total_race_time || 80;
+
+          standings.forEach((s) => {
+            const car = cars[s.team_id];
+            const lapTime = car?.last_lap_time && car.last_lap_time > 0 ? car.last_lap_time : 80;
+            // Base speed: 1 full lap every ~3.2 seconds
+            const speedMultiplier = (80 / Math.max(65, lapTime));
+            const currentP = next[s.team_id] ?? 0;
+            // Smoothly advance car along track
+            next[s.team_id] = currentP + (0.31 * speedMultiplier * dt);
+          });
+          return next;
+        });
+      }
+
+      animFrameRef.current = requestAnimationFrame(animateRace);
+    };
+
+    animFrameRef.current = requestAnimationFrame(animateRace);
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isRacing, standings, cars]);
 
   // Rain Canvas Animation (for WET or DRYING track)
   useEffect(() => {
@@ -95,24 +155,70 @@ export default function ProjectorRacePage() {
         )
       : null;
 
-  // Calculate authentic car coordinates (Staggered Grid on Lap 0, Oval Loop during race)
-  const getCarCoordinates = (position: number, gapToLeader: number, isPitting: boolean) => {
-    if (currentLap === 0) {
+  // Exact Stadium Circuit Parametric Trajectory with Tangent Heading Angle
+  const getCarTrackTransform = (teamId: string, position: number, isPitting: boolean) => {
+    // When idle / between blocks (not currently simulating laps), rest at the starting grid!
+    if (!isRacing) {
       const slot = Math.max(0, position - 1);
-      const x = 46 - slot * 5.5;
-      const y = slot % 2 === 0 ? 8 : 14;
-      return { x: Math.max(8, x), y };
+      const gridX = 48 - slot * 5.2; // Staggered behind finish line (x = 50%)
+      const gridY = slot % 2 === 0 ? 10 : 14; // Inside/outside grid boxes
+      return { x: Math.max(8, gridX), y: gridY, angle: 0 };
     }
 
-    const progress = ((gapToLeader ?? 0) % 80) / 80;
-    const angle = progress * Math.PI * 2 - Math.PI / 2;
+    const progress = (carProgress[teamId] ?? 0) % 1; // 0.0 to 1.0 around circuit
 
-    const radiusX = isPitting ? 36 : 44;
-    const radiusY = isPitting ? 26 : 38;
+    const straightLength = 36;
+    const cornerRadiusX = isPitting ? 16 : 24;
+    const cornerRadiusY = isPitting ? 26 : 38;
+    const arcLength = Math.PI * 31; // ~97.4%
+    const totalPerimeter = straightLength + arcLength + straightLength + arcLength; // ~266.8%
 
-    const x = 50 + Math.cos(angle) * radiusX;
-    const y = 50 + Math.sin(angle) * radiusY;
-    return { x, y };
+    const d = progress * totalPerimeter;
+
+    const topY = isPitting ? 24 : 12;
+    const botY = isPitting ? 76 : 88;
+    const rightCenter = 68;
+    const leftCenter = 32;
+
+    // Segment 1: Top Straight (Finish line 50% -> 68%)
+    if (d < straightLength / 2) {
+      const x = 50 + d;
+      return { x, y: topY, angle: 0 };
+    }
+
+    // Segment 2: Right Turn (68% Top -> 68% Bottom)
+    const seg2Start = straightLength / 2;
+    if (d < seg2Start + arcLength) {
+      const u = (d - seg2Start) / arcLength;
+      const theta = -Math.PI / 2 + u * Math.PI;
+      const x = rightCenter + cornerRadiusX * Math.cos(theta);
+      const y = 50 + cornerRadiusY * Math.sin(theta);
+      const heading = (u * 180);
+      return { x, y, angle: heading };
+    }
+
+    // Segment 3: Bottom Straight (68% -> 32%)
+    const seg3Start = seg2Start + arcLength;
+    if (d < seg3Start + straightLength) {
+      const x = rightCenter - (d - seg3Start);
+      return { x, y: botY, angle: 180 };
+    }
+
+    // Segment 4: Left Turn (32% Bottom -> 32% Top)
+    const seg4Start = seg3Start + straightLength;
+    if (d < seg4Start + arcLength) {
+      const u = (d - seg4Start) / arcLength;
+      const theta = Math.PI / 2 + u * Math.PI;
+      const x = leftCenter + cornerRadiusX * Math.cos(theta);
+      const y = 50 + cornerRadiusY * Math.sin(theta);
+      const heading = 180 + (u * 180);
+      return { x, y, angle: heading };
+    }
+
+    // Segment 5: Top Straight (32% -> 50% Finish Line)
+    const seg5Start = seg4Start + arcLength;
+    const x = leftCenter + (d - seg5Start);
+    return { x, y: topY, angle: 0 };
   };
 
   return (
@@ -153,6 +259,13 @@ export default function ProjectorRacePage() {
         </div>
 
         <div className="flex items-center gap-4">
+          {isRacing && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600/20 border border-red-500 rounded-lg text-red-400 text-xs font-mono font-bold animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+              LIVE SIMULATION ACTIVE
+            </div>
+          )}
+
           <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/90 rounded-lg border border-white/10 text-xs font-mono font-bold">
             {trackState === "DRY" ? (
               <Sun className="text-amber-500 h-4 w-4" />
@@ -180,7 +293,7 @@ export default function ProjectorRacePage() {
         <div className="w-[40%] border-r border-white/10 bg-black/75 backdrop-blur-md flex flex-col">
           <div className="px-6 py-3 border-b border-white/10 bg-zinc-900/80 flex items-center justify-between">
             <h2 className="font-mono font-bold text-xs tracking-widest text-zinc-400 uppercase">Live Timing Tower</h2>
-            <span className="text-[10px] font-mono text-zinc-500">LAP INTERVALS</span>
+            <span className="text-[10px] font-mono text-zinc-500">STANDINGS & GAPS</span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
@@ -242,7 +355,7 @@ export default function ProjectorRacePage() {
 
                   <div className="text-right">
                     <div className="font-mono font-bold text-base">
-                      {idx === 0 ? (s.total_race_time ?? 0).toFixed(3) : `+${(s.gap_to_leader ?? 0).toFixed(3)}s`}
+                      {idx === 0 ? "LEADER" : `+${(s.gap_to_leader ?? 0).toFixed(3)}s`}
                     </div>
                     <div className="font-mono text-xs text-zinc-400 flex items-center justify-end gap-1 mt-0.5">
                       <span className={isHammertime ? "text-purple-400 font-bold" : isFastest ? "text-emerald-400 font-bold" : ""}>
@@ -267,21 +380,25 @@ export default function ProjectorRacePage() {
             {/* Pit Lane Zone Line */}
             <div className="absolute inset-[30px] rounded-[75px] border-2 border-dashed border-amber-500/30 pointer-events-none" />
 
-            {/* Finish Line */}
-            <div className="absolute top-0 right-1/2 -translate-y-1/2 w-4 h-12 bg-white/30 border-l border-r border-white/60 finish-line-pattern" />
+            {/* Finish Line (Top Straight at 50%) */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-12 bg-white/30 border-l border-r border-white/60 finish-line-pattern z-10" />
 
             {/* Center HUD */}
             <div className="text-center z-10 pointer-events-none">
-              <div className="text-6xl font-black font-display tracking-tight text-white/15">LAP {currentLap}</div>
-              <div className="text-xs font-mono text-zinc-500 tracking-widest uppercase mt-1">GRAND PRIX LIVE STREAM</div>
+              <div className="text-6xl font-black font-display tracking-tight text-white/15">
+                {currentLap > 0 ? `LAP ${currentLap}` : "START GRID"}
+              </div>
+              <div className="text-xs font-mono text-zinc-500 tracking-widest uppercase mt-1">
+                {isRacing ? "LIVE RACE SIMULATION" : "GRAND PRIX PIT WALL READY"}
+              </div>
             </div>
 
-            {/* Cars along track loop */}
+            {/* Cars along track loop with smooth motion and rotation */}
             {standings.map((s, idx) => {
               const car = cars[s.team_id];
               const isPitting = s.status === "IN_PITLANE";
               const isHammertime = car?.is_hammertime || car?.active_power === "HAMMERTIME";
-              const { x, y } = getCarCoordinates(s.position, s.gap_to_leader, isPitting);
+              const { x, y, angle } = getCarTrackTransform(s.team_id, s.position, isPitting);
 
               const defaultColors = ["#dc0000", "#1e41ff", "#00d2be", "#ff8700", "#006f62", "#0090ff", "#005aff", "#f0f0f0"];
               const color = defaultColors[idx % defaultColors.length];
@@ -289,16 +406,18 @@ export default function ProjectorRacePage() {
               return (
                 <div
                   key={s.team_id}
-                  className="absolute z-20 transition-all duration-700 ease-linear"
+                  className="absolute z-20 transition-transform duration-75 ease-linear pointer-events-none"
                   style={{
                     left: `${x}%`,
                     top: `${y}%`,
-                    transform: "translate(-50%, -50%)",
+                    transform: `translate(-50%, -50%) rotate(${angle}deg)`,
                   }}
                 >
                   <div className="relative flex flex-col items-center">
+                    {/* Level Badge (counter-rotated so text is upright) */}
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border mb-1 whitespace-nowrap ${
+                      style={{ transform: `rotate(${-angle}deg)` }}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border mb-1 whitespace-nowrap shadow-md transition-transform ${
                         isHammertime
                           ? "bg-purple-900/90 text-purple-200 border-purple-400"
                           : isPitting

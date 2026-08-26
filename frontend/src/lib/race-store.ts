@@ -53,6 +53,7 @@ interface RaceState {
   isConnected: boolean;
   token: string | null;
   queuedPowers: PowerAssignment[];
+  lastEvent: string | null;
 
   connectRace: (token?: string) => void;
   connectTeam: (teamId: string, token?: string) => void;
@@ -74,6 +75,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
   isConnected: false,
   token: null,
   queuedPowers: [],
+  lastEvent: null,
 
   setToken: (token: string) => set({ token }),
   addPower: (power: PowerAssignment) => set((state) => ({ queuedPowers: [...state.queuedPowers, power] })),
@@ -104,6 +106,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
     socket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        set({ lastEvent: msg.type });
         if (msg.type === "INITIAL_STATE" || msg.type === "LAP_UPDATE" || msg.type === "WINDOW_LOCKED" || msg.type === "WINDOW_START" || msg.type === "BLOCK_COMPLETED" || msg.type === "GRID_INITIALIZED") {
           if (msg.data.current_block !== undefined) set({ currentBlock: msg.data.current_block });
           if (msg.data.current_lap !== undefined) set({ currentLap: msg.data.current_lap });
