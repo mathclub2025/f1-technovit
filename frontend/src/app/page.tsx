@@ -141,6 +141,7 @@ export default function LoginPage() {
               src="/image.png"
               alt="F1 Grand Prix Logo"
               fill
+              sizes="112px"
               className="object-contain drop-shadow-2xl"
               priority
             />

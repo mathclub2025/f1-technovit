@@ -85,7 +85,7 @@ export default function TeamStrategyPage() {
 
   const myCar = cars[teamId];
   const myPos = standings.find(s => s.team_id === teamId)?.position || "--";
-  const myGap = standings.find(s => s.team_id === teamId)?.gap_to_ahead?.toFixed(3) || "0.000";
+  const myGap = (standings.find(s => s.team_id === teamId)?.gap_to_ahead ?? 0).toFixed(3);
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
@@ -240,8 +240,10 @@ export default function TeamStrategyPage() {
                   <span>{row.driver} <span className="text-muted-foreground text-xs">({row.team_id})</span></span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="font-mono text-xs text-muted-foreground">+{row.gap_to_leader.toFixed(3)}s</span>
-                  <span className="font-mono text-xs text-muted-foreground">{row.compound}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {row.position === 1 ? "LEADER" : `+${(row.gap_to_leader ?? 0).toFixed(3)}s`}
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">{row.compound || "—"}</span>
                 </div>
               </div>
             ))}

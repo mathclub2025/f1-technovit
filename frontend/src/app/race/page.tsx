@@ -233,11 +233,11 @@ export default function ProjectorRacePage() {
 
                   <div className="text-right">
                     <div className="font-mono font-bold text-base">
-                      {idx === 0 ? s.total_race_time.toFixed(3) : `+${s.gap_to_leader.toFixed(3)}s`}
+                      {idx === 0 ? (s.total_race_time ?? 0).toFixed(3) : `+${(s.gap_to_leader ?? 0).toFixed(3)}s`}
                     </div>
                     <div className="font-mono text-xs text-zinc-400 flex items-center justify-end gap-1 mt-0.5">
                       <span className={isHammertime ? "text-purple-400 font-bold" : isFastest ? "text-emerald-400 font-bold" : ""}>
-                        {car?.last_lap_time?.toFixed(3) || "0.000"}s
+                        {(car?.last_lap_time ?? 0).toFixed(3)}s
                       </span>
                       {isFastest && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Fastest Sector/Lap"></span>}
                     </div>
