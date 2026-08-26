@@ -12,10 +12,17 @@ export default function ProjectorRacePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [isRacing, setIsRacing] = useState(false);
-  const [simLapProgress, setSimLapProgress] = useState<number>(0); // 0.0 to 5.0
+  const [simLapProgress, setSimLapProgress] = useState<number>(0);
   const [activeSimLap, setActiveSimLap] = useState<number>(currentLap);
-  const animFrameRef = useRef<number | null>(null);
-  const lastExecutedLapRef = useRef(currentLap);
+
+  const simStartTimeRef = useRef<number | null>(null);
+  const blockStartLapRef = useRef<number>(1);
+  const currentLapRef = useRef<number>(currentLap);
+  const lastExecutedLapRef = useRef<number>(currentLap);
+
+  useEffect(() => {
+    currentLapRef.current = currentLap;
+  }, [currentLap]);
 
   useEffect(() => {
     const token = localStorage.getItem("race_token") || undefined;
@@ -37,55 +44,46 @@ export default function ProjectorRacePage() {
   useEffect(() => {
     if (currentLap > lastExecutedLapRef.current) {
       lastExecutedLapRef.current = currentLap;
+      blockStartLapRef.current = Math.max(1, currentLap - 4);
+      simStartTimeRef.current = performance.now();
       setIsRacing(true);
       setSimLapProgress(0);
-      setActiveSimLap(Math.max(1, currentLap - 4));
+      setActiveSimLap(blockStartLapRef.current);
     }
   }, [currentLap]);
 
-  // 5-Lap Physics & Animation Engine (Takes ~16s to simulate 5 laps then cleanly stops on grid)
+  // Rock-solid 60fps clock-based simulation loop (15s total for 5 laps, never freezes)
   useEffect(() => {
-    if (!isRacing || standings.length === 0) return;
+    let animId: number;
+    const DURATION_MS = 15000; // 15 seconds to simulate 5 laps
 
-    let prevTimestamp: number | null = null;
-    const blockStartLap = Math.max(1, currentLap - 4);
-    const TOTAL_LAPS = 5.0;
-    const LAP_DURATION_SECS = 3.2; // 3.2 seconds per lap -> ~16s total block simulation
-
-    const animateRace = (timestamp: number) => {
-      if (!prevTimestamp) prevTimestamp = timestamp;
-      const dt = Math.min((timestamp - prevTimestamp) / 1000, 0.05);
-      prevTimestamp = timestamp;
-
-      setSimLapProgress((prev) => {
-        const nextProgress = prev + (dt / LAP_DURATION_SECS);
-        
-        // Update active lap counter in HUD
-        const currentLapOffset = Math.min(4, Math.floor(nextProgress));
-        setActiveSimLap(blockStartLap + currentLapOffset);
-
-        if (nextProgress >= TOTAL_LAPS) {
-          // Block simulation is complete! Settle cars on starting grid
+    const loop = (now: number) => {
+      if (simStartTimeRef.current !== null) {
+        const elapsed = now - simStartTimeRef.current;
+        if (elapsed < DURATION_MS) {
+          const progress = (elapsed / DURATION_MS) * 5.0;
+          setSimLapProgress(progress);
+          const currentLapOffset = Math.min(4, Math.floor(progress));
+          setActiveSimLap(blockStartLapRef.current + currentLapOffset);
+        } else {
+          // Block simulation complete: settle on starting grid!
+          simStartTimeRef.current = null;
           setIsRacing(false);
-          setActiveSimLap(currentLap);
-          return TOTAL_LAPS;
+          setSimLapProgress(5.0);
+          setActiveSimLap(currentLapRef.current);
         }
-
-        animFrameRef.current = requestAnimationFrame(animateRace);
-        return nextProgress;
-      });
+      }
+      animId = requestAnimationFrame(loop);
     };
 
-    animFrameRef.current = requestAnimationFrame(animateRace);
-
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [isRacing, currentLap, standings]);
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, []);
 
   // Handle manual window or block reset
   useEffect(() => {
     if (lastEvent === "WINDOW_START" || lastEvent === "GRID_INITIALIZED") {
+      simStartTimeRef.current = null;
       setIsRacing(false);
       setSimLapProgress(0);
       setActiveSimLap(currentLap);
@@ -163,7 +161,7 @@ export default function ProjectorRacePage() {
   // Exact Stadium Circuit Parametric Trajectory with Tangent Heading Angle
   const getCarTrackTransform = (teamId: string, position: number) => {
     const car = cars[teamId];
-    const blockStartLap = Math.max(1, currentLap - 4);
+    const blockStartLap = blockStartLapRef.current;
     const carCurrentLap = blockStartLap + Math.min(4, Math.floor(simLapProgress));
     
     // Determine if this car is actively in pitlane for the current simulated lap
@@ -173,32 +171,31 @@ export default function ProjectorRacePage() {
       car?.pit_lap === carCurrentLap
     );
 
-    // When idle / between blocks / not actively racing: Rest cleanly in staggered grid order at start line!
+    // When idle / between blocks / not actively racing: Staggered starting grid
     if (!isRacing) {
       const slot = Math.max(0, position - 1);
-      const gridX = 48 - slot * 5.2; // Staggered behind finish line (x = 50%)
-      const gridY = slot % 2 === 0 ? 11 : 15; // Inside/outside grid boxes
-      return { x: Math.max(8, gridX), y: gridY, angle: 0, isPitting: false };
+      const gridX = 47 - slot * 6.5; // Spaced 6.5% apart with zero overlap
+      const gridY = slot % 2 === 0 ? 10 : 15;
+      return { x: Math.max(6, gridX), y: gridY, angle: 0, isPitting: false };
     }
 
-    // Progress offset per car based on its lap pace and standing
+    // Dynamic pace & gradual distance separation
     const lapTime = car?.last_lap_time && car.last_lap_time > 0 ? car.last_lap_time : 80;
     const speedRatio = 80 / Math.max(65, lapTime);
-    // Gap offset creates gradual separation between cars
-    const gapOffset = (position - 1) * 0.035;
+    const gapOffset = (position - 1) * 0.04;
     const carLapDistance = Math.max(0, simLapProgress * speedRatio - gapOffset);
     const lapFraction = carLapDistance % 1; // 0.0 to 1.0 around circuit
 
     const straightLength = 38;
     const cornerRadiusX = isPitting ? 16 : 26;
     const cornerRadiusY = isPitting ? 26 : 38;
-    const arcLength = Math.PI * 32; // ~100.5%
+    const arcLength = Math.PI * 32;
     const totalPerimeter = straightLength + arcLength + straightLength + arcLength;
 
     const d = lapFraction * totalPerimeter;
 
-    const topY = isPitting ? 22 : 11;
-    const botY = isPitting ? 78 : 89;
+    const topY = isPitting ? 22 : 10;
+    const botY = isPitting ? 78 : 90;
     const rightCenter = 69;
     const leftCenter = 31;
 
@@ -268,38 +265,38 @@ export default function ProjectorRacePage() {
       )}
 
       {/* Header */}
-      <header className="flex justify-between items-center px-8 py-3.5 border-b border-white/10 bg-black/60 backdrop-blur-md z-20">
-        <div className="flex items-center gap-4">
+      <header className="flex justify-between items-center px-6 py-3 border-b border-white/10 bg-black/60 backdrop-blur-md z-20">
+        <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-3xl font-display font-black tracking-tight text-white uppercase flex items-center gap-2">
+            <h1 className="text-2xl font-display font-black tracking-tight text-white uppercase flex items-center gap-2">
               F1 <span className="text-red-600">Grand Prix</span>
             </h1>
-            <p className="text-zinc-400 font-mono text-xs mt-0.5 tracking-wider">
+            <p className="text-zinc-400 font-mono text-xs mt-0.2 tracking-wider">
               BLOCK {currentBlock} &bull; LAP {isRacing ? activeSimLap : currentLap} / 50
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {isRacing ? (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-red-600/20 border border-red-500 rounded-lg text-red-400 text-xs font-mono font-bold animate-pulse">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-600/20 border border-red-500 rounded-lg text-red-400 text-xs font-mono font-bold animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
               SIMULATING LAPS ({Math.floor(simLapProgress) + 1}/5)
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-zinc-400 text-xs font-mono font-bold">
+            <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-white/10 rounded-lg text-zinc-400 text-xs font-mono font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               START GRID LOCKED
             </div>
           )}
 
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/90 rounded-lg border border-white/10 text-xs font-mono font-bold">
+          <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900/90 rounded-lg border border-white/10 text-xs font-mono font-bold">
             {trackState === "DRY" ? (
-              <Sun className="text-amber-500 h-4 w-4" />
+              <Sun className="text-amber-500 h-3.5 w-3.5" />
             ) : trackState === "WET" ? (
-              <CloudRain className="text-blue-400 h-4 w-4 animate-bounce" />
+              <CloudRain className="text-blue-400 h-3.5 w-3.5 animate-bounce" />
             ) : (
-              <CloudDrizzle className="text-amber-400 h-4 w-4" />
+              <CloudDrizzle className="text-amber-400 h-3.5 w-3.5" />
             )}
             <span>{trackState} TRACK</span>
           </div>
@@ -307,7 +304,7 @@ export default function ProjectorRacePage() {
           {/* Discrete Admin Return Button */}
           <Link
             href="/admin"
-            className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 hover:text-white px-2.5 py-1.5 rounded bg-zinc-900 border border-white/5 hover:border-white/20 transition-colors"
+            className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 hover:text-white px-2 py-1 rounded bg-zinc-900 border border-white/5 hover:border-white/20 transition-colors"
             title="Return to Admin Panel"
           >
             <Settings className="h-3 w-3" /> Admin
@@ -316,14 +313,14 @@ export default function ProjectorRacePage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden z-10">
-        {/* Left Panel - 30% - Compact Dynamic Timing Tower */}
-        <div className="w-[30%] border-r border-white/10 bg-black/75 backdrop-blur-md flex flex-col">
-          <div className="px-5 py-3 border-b border-white/10 bg-zinc-900/80 flex items-center justify-between">
+        {/* Left Panel - 24% - Compact Sleek F1 Timing Tower without extra space */}
+        <div className="w-[24%] border-r border-white/10 bg-black/75 backdrop-blur-md flex flex-col justify-start">
+          <div className="px-4 py-2.5 border-b border-white/10 bg-zinc-900/80 flex items-center justify-between">
             <h2 className="font-mono font-bold text-xs tracking-widest text-zinc-400 uppercase">Timing Tower</h2>
             <span className="text-[10px] font-mono text-zinc-500">STANDINGS</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="p-2 space-y-1 overflow-y-auto">
             {standings.map((s, idx) => {
               const car = cars[s.team_id];
               const isPitting = s.status === "IN_PITLANE";
@@ -345,27 +342,27 @@ export default function ProjectorRacePage() {
               return (
                 <div
                   key={s.team_id}
-                  className={`flex items-center justify-between p-2.5 rounded-lg border transition-all duration-300 ${
+                  className={`flex items-center justify-between px-2.5 py-2 rounded border transition-all duration-300 ${
                     isHammertime
-                      ? "border-purple-500 bg-purple-950/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] animate-pulse"
+                      ? "border-purple-500 bg-purple-950/40 shadow-[0_0_12px_rgba(168,85,247,0.3)] animate-pulse"
                       : isPitting
-                      ? "border-amber-500 bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
-                      : "border-white/10 bg-zinc-900/60 hover:bg-zinc-900"
+                      ? "border-amber-500 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                      : "border-white/10 bg-zinc-900/70 hover:bg-zinc-900"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 text-center font-bold font-mono text-sm">{s.position}</div>
-                    <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: color }}></div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 text-center font-bold font-mono text-xs text-zinc-300">{s.position}</div>
+                    <div className="w-1 h-7 rounded-full" style={{ backgroundColor: color }}></div>
                     <div>
-                      <div className="font-bold text-sm leading-tight flex items-center gap-1">
+                      <div className="font-bold text-xs leading-none flex items-center gap-1">
                         {s.driver}
                         {isHammertime && (
-                          <span className="text-[8px] bg-purple-600 text-white font-mono px-1 py-0.2 rounded font-black tracking-wider flex items-center">
-                            <Hammer className="h-2 w-2 mr-0.5" /> HAMMER
+                          <span className="text-[7px] bg-purple-600 text-white font-mono px-1 py-0.2 rounded font-black tracking-wider flex items-center">
+                            HAMMER
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                      <div className="text-[10px] text-zinc-400 flex items-center gap-1.5 mt-1">
                         <span className={`w-1.5 h-1.5 rounded-full ${compoundColors[s.compound] || "bg-gray-500"}`}></span>
                         <span className="font-mono">
                           {s.compound.charAt(0)} &bull; {car?.tire_age || 0} Laps
@@ -376,10 +373,10 @@ export default function ProjectorRacePage() {
                   </div>
 
                   <div className="text-right">
-                    <div className="font-mono font-bold text-sm">
+                    <div className="font-mono font-bold text-xs">
                       {idx === 0 ? "LEADER" : `+${(s.gap_to_leader ?? 0).toFixed(3)}s`}
                     </div>
-                    <div className="font-mono text-[10px] text-zinc-400 flex items-center justify-end gap-1 mt-0.5">
+                    <div className="font-mono text-[9px] text-zinc-400 flex items-center justify-end gap-1 mt-0.5">
                       <span className={isHammertime ? "text-purple-400 font-bold" : isFastest ? "text-emerald-400 font-bold" : ""}>
                         {(car?.last_lap_time ?? 0).toFixed(3)}s
                       </span>
@@ -389,24 +386,24 @@ export default function ProjectorRacePage() {
               );
             })}
             {standings.length === 0 && (
-              <div className="p-8 text-center text-zinc-500 font-mono text-xs">Waiting for race grid setup...</div>
+              <div className="p-4 text-center text-zinc-500 font-mono text-xs">Waiting for race grid setup...</div>
             )}
           </div>
         </div>
 
-        {/* Right Panel - 70% - Expanded High-Fidelity Track Visualizer */}
-        <div className="w-[70%] relative flex items-center justify-center bg-[#070709] p-4 overflow-hidden">
+        {/* Right Panel - 76% - Massive High-Fidelity Stadium Circuit Visualizer */}
+        <div className="w-[76%] relative flex items-center justify-center bg-[#070709] p-2 overflow-hidden">
           {/* Expanded Circuit Visualizer */}
-          <div className="relative w-full max-w-[1200px] aspect-[2.1/1] rounded-[130px] border-[38px] border-zinc-800 shadow-[inset_0_0_0_8px_#121214,0_0_80px_rgba(0,0,0,0.95)] flex items-center justify-center">
+          <div className="relative w-full max-w-[1350px] aspect-[2.25/1] rounded-[140px] border-[32px] border-zinc-800 shadow-[inset_0_0_0_6px_#121214,0_0_80px_rgba(0,0,0,0.95)] flex items-center justify-center">
             {/* Inner Pit Lane Box Route */}
-            <div className="absolute inset-[24px] rounded-[100px] border-2 border-dashed border-amber-500/35 pointer-events-none" />
+            <div className="absolute inset-[20px] rounded-[110px] border-2 border-dashed border-amber-500/35 pointer-events-none" />
 
             {/* Finish Line (Top Straight at 50%) */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-14 bg-white/40 border-l-2 border-r-2 border-white/70 finish-line-pattern z-10" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-12 bg-white/40 border-l-2 border-r-2 border-white/70 finish-line-pattern z-10" />
 
             {/* Center HUD */}
             <div className="text-center z-10 pointer-events-none">
-              <div className="text-7xl font-black font-display tracking-tight text-white/15">
+              <div className="text-8xl font-black font-display tracking-tight text-white/15">
                 {currentLap > 0 ? `LAP ${isRacing ? activeSimLap : currentLap}` : "START GRID"}
               </div>
               <div className="text-xs font-mono text-zinc-500 tracking-widest uppercase mt-1">
@@ -437,7 +434,7 @@ export default function ProjectorRacePage() {
                     {/* Badge (counter-rotated so text is upright) */}
                     <span
                       style={{ transform: `rotate(${-angle}deg)` }}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border mb-1 whitespace-nowrap shadow-md transition-transform ${
+                      className={`px-1.5 py-0.5 rounded text-[8px] font-bold border mb-1 whitespace-nowrap shadow-md transition-transform ${
                         isHammertime
                           ? "bg-purple-900/90 text-purple-200 border-purple-400"
                           : isPitting
@@ -452,7 +449,7 @@ export default function ProjectorRacePage() {
                       color={color}
                       carNumber={s.position}
                       facing="right"
-                      className="w-18 h-5"
+                      className="w-16 h-5"
                       glow={!isPitting || isHammertime}
                     />
                   </div>
