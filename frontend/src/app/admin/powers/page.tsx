@@ -13,33 +13,33 @@ import { useRaceStore } from "@/lib/race-store";
 const POWERS = [
   {
     id: "HAMMERTIME",
-    name: "Hammertime",
-    description: "Reduces lap time by 1.50s for ONE lap.",
+    name: "Lewis Hamilton (Hammertime)",
+    description: "Forces tire age x = 1 for all 5 laps, ignoring actual degradation.",
     category: "Offensive",
   },
   {
     id: "BLITZKRIEG",
-    name: "Blitzkrieg",
-    description: "Reduces lap time by 0.80s for the current block.",
+    name: "Max Verstappen (Blitzkrieg)",
+    description: "Flat 10.00s pit stop and complete immunity from pitlane traffic congestion.",
     category: "Offensive",
   },
   {
-    id: "MINISTER_OF_DEFENCE",
-    name: "Minister of Defence",
-    description: "Blocks pitlane entry for ALL teams for one block.",
-    category: "Defensive",
-  },
-  {
     id: "RAINMASTER",
-    name: "Schumacher Rainmaster",
-    description: "Reduces wet-on-slicks penalty from +12s to +2s per lap.",
+    name: "Michael Schumacher (Rainmaster)",
+    description: "Reduces wet-on-slicks penalty from +12.00s to +2.00s per lap on wet track.",
     category: "Weather",
   },
   {
     id: "PLAN_E",
-    name: "Plan E",
-    description: "Custom penalty for a specific team (requires target & penalty value).",
-    category: "Malicious",
+    name: "Charles Leclerc (Plan E)",
+    description: "Sets pit penalty to exact die-roll value (5.00s success / 30.00s fail).",
+    category: "Tactical",
+  },
+  {
+    id: "MINISTER_OF_DEFENCE",
+    name: "Fernando Alonso (Minister of Defence)",
+    description: "Closes pit entry and blocks pit execution for the selected target team.",
+    category: "Defensive",
   }
 ];
 
@@ -47,8 +47,8 @@ export default function PowersPage() {
   const { cars, queuedPowers, addPower, clearPowers } = useRaceStore();
   
   const [targetTeam, setTargetTeam] = useState<string>("");
-  const [planETarget, setPlanETarget] = useState<string>("");
-  const [planEPenalty, setPlanEPenalty] = useState<string>("");
+  const [alonsoTarget, setAlonsoTarget] = useState<string>("");
+  const [planEPenalty, setPlanEPenalty] = useState<string>("5");
 
   const carList = Object.values(cars);
 
@@ -57,7 +57,7 @@ export default function PowersPage() {
     addPower({
       team_id: targetTeam,
       power: powerId,
-      target_team_id: powerId === "PLAN_E" ? planETarget : null,
+      target_team_id: powerId === "MINISTER_OF_DEFENCE" ? alonsoTarget : null,
       plan_e_penalty: powerId === "PLAN_E" ? parseFloat(planEPenalty) : null,
     });
   };
@@ -112,32 +112,44 @@ export default function PowersPage() {
                       </td>
                       <td className="py-2.5 px-3 text-muted-foreground max-w-xs">
                         {p.description}
-                        {p.id === "PLAN_E" && targetTeam && (
-                          <div className="mt-2 flex gap-2">
-                            <Select value={planETarget} onValueChange={setPlanETarget}>
-                              <SelectTrigger className="h-8 w-[130px]">
-                                <SelectValue placeholder="Target Team" />
+                        {p.id === "MINISTER_OF_DEFENCE" && targetTeam && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs font-semibold text-white">Target:</span>
+                            <Select value={alonsoTarget} onValueChange={(v) => setAlonsoTarget(v ?? "")}>
+                              <SelectTrigger className="h-8 w-[160px]">
+                                <SelectValue placeholder="Select Target..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {carList.map((c) => (
-                                  <SelectItem key={c.team_id} value={c.team_id}>{c.driver}</SelectItem>
+                                {carList.filter(c => c.team_id !== targetTeam).map((c) => (
+                                  <SelectItem key={c.team_id} value={c.team_id}>{c.driver} ({c.team_id})</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                            <Input 
-                              type="number" 
-                              placeholder="+ Secs" 
-                              className="h-8 w-[80px]"
-                              value={planEPenalty}
-                              onChange={(e) => setPlanEPenalty(e.target.value)}
-                            />
+                          </div>
+                        )}
+                        {p.id === "PLAN_E" && targetTeam && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs font-semibold text-white">Die-roll Pit Penalty:</span>
+                            <Select value={planEPenalty} onValueChange={(v) => setPlanEPenalty(v ?? "5")}>
+                              <SelectTrigger className="h-8 w-[130px]">
+                                <SelectValue placeholder="Penalty" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="5">5.00s (Success)</SelectItem>
+                                <SelectItem value="30">30.00s (Fail)</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-right">
                         <Button 
                           size="sm" 
-                          disabled={!targetTeam || (p.id === "PLAN_E" && (!planETarget || !planEPenalty))}
+                          disabled={
+                            !targetTeam || 
+                            (p.id === "MINISTER_OF_DEFENCE" && !alonsoTarget) ||
+                            (p.id === "PLAN_E" && !planEPenalty)
+                          }
                           onClick={() => handleQueuePower(p.id)}
                         >
                           Queue

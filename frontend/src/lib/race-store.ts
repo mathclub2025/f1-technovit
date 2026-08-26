@@ -26,6 +26,12 @@ interface CarState {
   status: string;
   has_submitted: boolean;
   has_used_power: boolean;
+  active_power?: string | null;
+  is_hammertime?: boolean;
+  is_pit_blocked?: boolean;
+  is_blitzkrieg?: boolean;
+  is_rainmaster?: boolean;
+  is_plan_e?: boolean;
 }
 
 interface PowerAssignment {

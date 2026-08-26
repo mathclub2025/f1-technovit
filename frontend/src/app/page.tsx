@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [view, setView] = useState<"LOGIN" | "ADMIN">("LOGIN");
+  const [view, setView] = useState<"LOGIN" | "ADMIN" | "SIGNUP">("LOGIN");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [password, setPassword] = useState("");
   

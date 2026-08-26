@@ -136,6 +136,17 @@ export default function TeamStrategyPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {myCar?.is_pit_blocked && (
+              <div className="p-3 bg-red-600/20 border border-red-500/50 rounded-lg text-red-400 text-sm font-semibold flex items-center gap-2">
+                <span>⚠️</span> MINISTER OF DEFENCE ACTIVE — PIT ENTRY CLOSED FOR THIS BLOCK
+              </div>
+            )}
+            {myCar?.is_hammertime && (
+              <div className="p-3 bg-purple-600/20 border border-purple-500/50 rounded-lg text-purple-300 text-sm font-semibold flex items-center gap-2">
+                <span>🔨</span> HAMMERTIME ACTIVE — DEGRADATION COEFFICIENT FROZEN (x = 1)
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Driver Action</label>
               <div className="grid grid-cols-2 gap-3">
@@ -151,7 +162,7 @@ export default function TeamStrategyPage() {
                   variant={action === "PIT" ? "default" : "outline"}
                   onClick={() => setAction("PIT")}
                   className="h-9"
-                  disabled={!windowOpen || myCar?.has_submitted}
+                  disabled={!windowOpen || myCar?.has_submitted || Boolean(myCar?.is_pit_blocked)}
                 >
                   Pit Stop
                 </Button>
@@ -162,7 +173,7 @@ export default function TeamStrategyPage() {
               <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Target Lap</label>
-                  <Select value={targetLap} onValueChange={setTargetLap} disabled={!windowOpen || myCar?.has_submitted}>
+                  <Select value={targetLap} onValueChange={(v) => setTargetLap(v ?? "")} disabled={!windowOpen || myCar?.has_submitted}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select Lap..." />
                     </SelectTrigger>
@@ -175,16 +186,16 @@ export default function TeamStrategyPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">New Compound</label>
-                  <Select value={newCompound} onValueChange={setNewCompound} disabled={!windowOpen || myCar?.has_submitted}>
+                  <Select value={newCompound} onValueChange={(v) => setNewCompound(v ?? "")} disabled={!windowOpen || myCar?.has_submitted}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select Compound..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SOFT">Soft</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HARD">Hard</SelectItem>
-                      <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
-                      <SelectItem value="WET">Wet</SelectItem>
+                      <SelectItem value="SOFT">Soft (Red)</SelectItem>
+                      <SelectItem value="MEDIUM">Medium (Yellow)</SelectItem>
+                      <SelectItem value="HARD">Hard (White)</SelectItem>
+                      <SelectItem value="INTER">Intermediate (Green)</SelectItem>
+                      <SelectItem value="WET">Full Wet (Blue)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -195,7 +206,7 @@ export default function TeamStrategyPage() {
             <Button 
               className="w-full gap-1.5" 
               onClick={handleSubmit} 
-              disabled={!windowOpen || myCar?.has_submitted}
+              disabled={!windowOpen || myCar?.has_submitted || (action === "PIT" && (!targetLap || !newCompound))}
             >
               {myCar?.has_submitted ? "Strategy Locked In" : "Confirm Submission"}
               {!myCar?.has_submitted && <ArrowRight className="size-4" />}

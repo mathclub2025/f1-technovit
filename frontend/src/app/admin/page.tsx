@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Clock, Play, Flag, SkipForward } from "lucide-react";
+import { Users, Clock, Play, Flag, SkipForward, Monitor } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
 
 export default function AdminOverviewPage() {
@@ -134,6 +135,11 @@ export default function AdminOverviewPage() {
             <Button onClick={handleExecuteBlock} size="sm" className="gap-1.5" disabled={windowOpen && timeLeft > 0}>
               <SkipForward className="h-3.5 w-3.5" /> Execute Block {currentBlock}
             </Button>
+            <Link href="/race" target="_blank">
+              <Button variant="default" size="sm" className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-bold">
+                <Monitor className="h-3.5 w-3.5" /> Projector View (/race)
+              </Button>
+            </Link>
           </div>
         }
       />
