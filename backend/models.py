@@ -56,10 +56,13 @@ class Car(BaseModel):
 
 class StrategySubmission(BaseModel):
     team_id: str
-    round_number: int
+    round_number: Optional[int] = 1
     action: ActionType
     pit_lap: Optional[int] = None
     new_compound: Optional[Compound] = None
+    use_power: Optional[PowerType] = None
+    power_target_team_id: Optional[str] = None
+    plan_e_penalty: Optional[float] = None
 
 
 class PowerAssignment(BaseModel):

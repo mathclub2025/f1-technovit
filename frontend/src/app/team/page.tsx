@@ -25,6 +25,9 @@ export default function TeamStrategyPage() {
   const [action, setAction] = useState<"STAY_OUT" | "PIT">("STAY_OUT");
   const [targetLap, setTargetLap] = useState<string>("");
   const [newCompound, setNewCompound] = useState<string>("");
+  const [selectedPower, setSelectedPower] = useState<string>("NONE");
+  const [alonsoTarget, setAlonsoTarget] = useState<string>("");
+  const [planEPenalty, setPlanEPenalty] = useState<string>("5");
   const [timeLeft, setTimeLeft] = useState<number>(0);
 
   useEffect(() => {
@@ -89,6 +92,10 @@ export default function TeamStrategyPage() {
     s => normalize(s.team_id) === normalize(teamId) || normalize(s.driver) === normalize(teamId)
   );
 
+  const otherCars = Object.values(cars).filter(
+    c => normalize(c.team_id) !== normalize(teamId) && normalize(c.driver) !== normalize(teamId)
+  );
+
   const myPos = myStandings?.position || "--";
   const myGap = (myStandings?.gap_to_ahead ?? 0).toFixed(3);
 
@@ -100,7 +107,10 @@ export default function TeamStrategyPage() {
       round_number: currentBlock,
       action: action,
       pit_lap: action === "PIT" ? parseInt(targetLap) : null,
-      new_compound: action === "PIT" ? newCompound : null
+      new_compound: action === "PIT" ? newCompound : null,
+      use_power: selectedPower !== "NONE" ? selectedPower : null,
+      power_target_team_id: selectedPower === "MINISTER_OF_DEFENCE" ? alonsoTarget : null,
+      plan_e_penalty: selectedPower === "PLAN_E" ? parseFloat(planEPenalty) : null,
     };
 
     try {
@@ -114,39 +124,38 @@ export default function TeamStrategyPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast("Strategy Locked In!", { description: `${action === "PIT" ? `Pit on Lap ${targetLap} for ${newCompound}` : "Staying Out"}` });
+        const powerMsg = selectedPower !== "NONE" ? ` + Activated ${selectedPower}!` : "";
+        toast("Strategy Locked In!", { description: `${action === "PIT" ? `Pit on Lap ${targetLap} for ${newCompound}` : "Staying Out"}${powerMsg}` });
       } else {
         toast("Submission Error", { description: data.detail || "Could not submit strategy." });
       }
     } catch (e) {
-      toast("Network Error", { description: "Failed to reach race server." });
+      toast("Network Error", { description: "Failed to connect to pit wall server." });
     }
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
       <PageHeader
-        eyebrow={windowOpen ? `BLOCK ${currentBlock} SUBMISSION OPEN` : "RACE LIVE"}
+        eyebrow="RACE LIVE"
         title="Strategy Submission"
-        description="Monitor your telemetry and lock in your strategy."
+        description="Monitor your telemetry, calculate mathematical tire models, and lock in your strategy."
         actions={
-          windowOpen ? (
-            <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md font-mono text-sm border border-border">
-              <Clock className="h-4 w-4 text-primary" /> {formatTime(timeLeft)}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-card text-card-foreground shadow-sm">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Window:</span>
+              <span className={`font-mono text-sm font-bold ${windowOpen ? "text-primary animate-pulse" : "text-muted-foreground"}`}>
+                {windowOpen ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}` : "CLOSED"}
+              </span>
             </div>
-          ) : null
+          </div>
         }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Current Status */}
-        <Card>
+        <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Activity className="h-4 w-4" /> Current Status
@@ -167,9 +176,15 @@ export default function TeamStrategyPage() {
                 {myCar?.compound || "Unknown"}
               </span>
             </div>
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex justify-between items-center text-sm border-b border-border pb-2.5">
               <span className="text-muted-foreground">Tire Age</span>
               <span className="font-mono font-medium">{myCar?.tire_age || 0} Laps</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Superpower Status</span>
+              <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded ${myCar?.has_used_power ? "bg-zinc-800 text-zinc-400" : "bg-purple-900/60 text-purple-200 border border-purple-500/40"}`}>
+                {myCar?.has_used_power ? "REDEEMED" : "AVAILABLE"}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -180,7 +195,7 @@ export default function TeamStrategyPage() {
             <CardTitle className="flex items-center gap-2 text-base">Strategy Input</CardTitle>
             <CardDescription>
               {windowOpen 
-                ? "Select your preferred strategy for the upcoming block." 
+                ? "Select your preferred strategy and optional tactical superpower for the upcoming block." 
                 : "Submission window is closed. Waiting for race block execution."}
             </CardDescription>
           </CardHeader>
@@ -250,12 +265,87 @@ export default function TeamStrategyPage() {
                 </div>
               </div>
             )}
+
+            {/* Tactical Superpower Section */}
+            <div className="border-t border-border pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <span>⚡</span> Tactical Superpower <span className="text-xs text-muted-foreground font-normal">(1-time activation per race)</span>
+                </label>
+                {myCar?.has_used_power && (
+                  <span className="text-xs text-zinc-500 font-mono">Already used</span>
+                )}
+              </div>
+
+              {myCar?.has_used_power ? (
+                <div className="p-3 bg-zinc-900/60 rounded-lg border border-border text-xs text-muted-foreground flex items-center justify-between">
+                  <span>Superpower redeemed: <strong className="text-zinc-300 uppercase">{myCar.active_power || "Activated"}</strong></span>
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-zinc-500">Locked</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Select 
+                    value={selectedPower} 
+                    onValueChange={(v) => setSelectedPower(v ?? "NONE")}
+                    disabled={!windowOpen || myCar?.has_submitted}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a superpower to activate..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">None (Save superpower for later block)</SelectItem>
+                      <SelectItem value="HAMMERTIME">🔨 Lewis Hamilton (Hammertime) — Freeze tire degradation (x = 1)</SelectItem>
+                      <SelectItem value="BLITZKRIEG">⚡ Max Verstappen (Blitzkrieg) — 10.00s pit stop & congestion immunity</SelectItem>
+                      <SelectItem value="RAINMASTER">🌧️ Michael Schumacher (Rainmaster) — Wet-on-slicks penalty cut to +2.00s</SelectItem>
+                      <SelectItem value="PLAN_E">🎲 Charles Leclerc (Plan E) — Tactical pit gamble (5.00s / 30.00s)</SelectItem>
+                      <SelectItem value="MINISTER_OF_DEFENCE">🛡️ Fernando Alonso (Minister of Defence) — Block rival pit entry</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {selectedPower === "MINISTER_OF_DEFENCE" && (
+                    <div className="p-3 bg-red-950/30 border border-red-500/40 rounded-lg space-y-2 animate-in fade-in duration-200">
+                      <label className="text-xs font-semibold text-red-300">Select Opponent Team to Block from Pitlane:</label>
+                      <Select value={alonsoTarget} onValueChange={(v) => setAlonsoTarget(v ?? "")} disabled={!windowOpen || myCar?.has_submitted}>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select target team..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {otherCars.map((c) => (
+                            <SelectItem key={c.team_id} value={c.team_id}>{c.driver} ({c.team_id})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {selectedPower === "PLAN_E" && (
+                    <div className="p-3 bg-purple-950/30 border border-purple-500/40 rounded-lg space-y-2 animate-in fade-in duration-200">
+                      <label className="text-xs font-semibold text-purple-300">Plan E Die-Roll Pit Delta:</label>
+                      <Select value={planEPenalty} onValueChange={(v) => setPlanEPenalty(v ?? "5")} disabled={!windowOpen || myCar?.has_submitted}>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select outcome..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">5.00s (Success outcome)</SelectItem>
+                          <SelectItem value="30">30.00s (Fail outcome)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-2">
             <Button 
               className="w-full gap-1.5" 
               onClick={handleSubmit} 
-              disabled={!windowOpen || myCar?.has_submitted || (action === "PIT" && (!targetLap || !newCompound))}
+              disabled={
+                !windowOpen || 
+                myCar?.has_submitted || 
+                (action === "PIT" && (!targetLap || !newCompound)) ||
+                (selectedPower === "MINISTER_OF_DEFENCE" && !alonsoTarget)
+              }
             >
               {myCar?.has_submitted ? "Strategy Locked In" : "Confirm Submission"}
               {!myCar?.has_submitted && <ArrowRight className="size-4" />}

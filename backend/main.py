@@ -447,6 +447,31 @@ async def submit_strategy(
         car.pit_lap = None
         car.next_compound = None
     car.has_submitted = True
+
+    # Handle Team Superpower Activation
+    if submission.use_power and submission.use_power != PowerType.NONE:
+        if car.has_used_power and car.active_power != submission.use_power:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your team has already used its superpower in this Grand Prix",
+            )
+        car.active_power = submission.use_power
+        car.has_used_power = True
+        if submission.use_power == PowerType.HAMMERTIME:
+            car.is_hammertime = True
+        elif submission.use_power == PowerType.BLITZKRIEG:
+            car.is_blitzkrieg = True
+        elif submission.use_power == PowerType.RAINMASTER:
+            car.is_rainmaster = True
+        elif submission.use_power == PowerType.PLAN_E:
+            car.is_plan_e = True
+            car.plan_e_custom_penalty = submission.plan_e_penalty or 5.0
+        elif submission.use_power == PowerType.MINISTER_OF_DEFENCE:
+            if submission.power_target_team_id:
+                target_car = cars.get(submission.power_target_team_id)
+                if target_car is not None:
+                    target_car.is_pit_blocked = True
+
     # Persist strategy submission to SQLite
     try:
         block_id = database.database.get_block_id(1, current_block)
@@ -466,21 +491,84 @@ async def submit_strategy(
     except Exception as e:
         print(f"Error persisting strategy to SQLite: {e}")
 
-
+    standings = engine.build_standings(cars)
     event_data = {
         "team_id": submission.team_id,
         "action": submission.action,
         "pit_lap": car.pit_lap,
         "next_compound": car.next_compound,
         "has_submitted": True,
+        "active_power": car.active_power,
+        "has_used_power": car.has_used_power,
+        "standings": standings,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
     }
     await broadcast_race("STRATEGY_SUBMITTED", event_data)
     await broadcast_team(submission.team_id, "STRATEGY_SUBMITTED", event_data)
 
     return {
         "status": "ok",
-        "message": "Strategy successfully locked for upcoming block",
+        "message": "Strategy and tactical powers successfully locked for upcoming block",
         "car": car,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
+    }
+
+
+@app.post("/api/strategy/use-power")
+async def team_use_power(
+    payload: PowerAssignment,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Team player can activate their own superpower (1-time use per race)"""
+    if user.role != "admin" and user.teamId != payload.team_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only activate superpowers for your own team",
+        )
+    car = cars.get(payload.team_id)
+    if not car:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    if car.has_used_power:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your team has already used its superpower in this Grand Prix",
+        )
+
+    car.active_power = payload.power
+    car.has_used_power = True
+
+    if payload.power == PowerType.HAMMERTIME:
+        car.is_hammertime = True
+    elif payload.power == PowerType.BLITZKRIEG:
+        car.is_blitzkrieg = True
+    elif payload.power == PowerType.RAINMASTER:
+        car.is_rainmaster = True
+    elif payload.power == PowerType.PLAN_E:
+        car.is_plan_e = True
+        car.plan_e_custom_penalty = payload.plan_e_penalty or 5.0
+    elif payload.power == PowerType.MINISTER_OF_DEFENCE:
+        if payload.target_team_id:
+            target = cars.get(payload.target_team_id)
+            if target is not None:
+                target.is_pit_blocked = True
+
+    standings = engine.build_standings(cars)
+    event_data = {
+        "team_id": payload.team_id,
+        "power": payload.power,
+        "target_team_id": payload.target_team_id,
+        "has_used_power": True,
+        "standings": standings,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
+    }
+    await broadcast_race("POWER_ACTIVATED", event_data)
+    await broadcast_team(payload.team_id, "POWER_ACTIVATED", event_data)
+
+    return {
+        "status": "ok",
+        "message": f"Superpower {payload.power} activated successfully!",
+        "car": car,
+        "cars": {k: v.model_dump() for k, v in cars.items()},
     }
 
 
