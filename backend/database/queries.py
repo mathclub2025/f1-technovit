@@ -88,21 +88,22 @@ def create_team_with_members(registration_number, email, password, team_name, me
                 if members:
                     for member in members:
                         m_name = member.name if hasattr(member, 'name') else member.get('name')
-                        m_email = member.email if hasattr(member, 'email') else member.get('email')
+                        m_reg = member.reg_no if hasattr(member, 'reg_no') else (member.get('reg_no') or registration_number)
+                        m_email = member.email if hasattr(member, 'email') else (member.get('email') or f"{str(m_reg).lower()}@technovit.vit.ac.in")
                         cursor.execute(
                             """
                             INSERT INTO team_members (team_id, name, email, registration_no)
                             VALUES (%s, %s, %s, %s)
-                            ON CONFLICT (email) DO NOTHING
+                            ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, registration_no = EXCLUDED.registration_no
                             """,
-                            (team_id, m_name, m_email, f"{registration_number}_{m_email}")
+                            (team_id, m_name, m_email, m_reg)
                         )
                 else:
                     cursor.execute(
                         """
                         INSERT INTO team_members (team_id, name, email, registration_no)
                         VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (email) DO NOTHING
+                        ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, registration_no = EXCLUDED.registration_no
                         """,
                         (team_id, team_name, email, registration_number)
                     )
@@ -142,18 +143,19 @@ def create_team_with_members(registration_number, email, password, team_name, me
             if members:
                 for member in members:
                     m_name = member.name if hasattr(member, 'name') else member.get('name')
-                    m_email = member.email if hasattr(member, 'email') else member.get('email')
+                    m_reg = member.reg_no if hasattr(member, 'reg_no') else (member.get('reg_no') or registration_number)
+                    m_email = member.email if hasattr(member, 'email') else (member.get('email') or f"{str(m_reg).lower()}@technovit.vit.ac.in")
                     cursor.execute(
                         """
-                        INSERT OR IGNORE INTO team_members (team_id, name, email, registration_no)
+                        INSERT OR REPLACE INTO team_members (team_id, name, email, registration_no)
                         VALUES (?, ?, ?, ?)
                         """,
-                        (team_id, m_name, m_email, f"{registration_number}_{m_email}")
+                        (team_id, m_name, m_email, m_reg)
                     )
             else:
                 cursor.execute(
                     """
-                    INSERT OR IGNORE INTO team_members (team_id, name, email, registration_no)
+                    INSERT OR REPLACE INTO team_members (team_id, name, email, registration_no)
                     VALUES (?, ?, ?, ?)
                     """,
                     (team_id, team_name, email, registration_number)

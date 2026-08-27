@@ -185,13 +185,16 @@ class AdminStrategyOverride(BaseModel):
 
 class TeamMember(BaseModel):
     name: str
-    email: str
+    reg_no: Optional[str] = None
+    email: Optional[str] = None
 
 class TeamRegistration(BaseModel):
-    email: str
     teamId: str
-    password: str
-    members: list[TeamMember]
+    captain_name: Optional[str] = None
+    captain_reg_no: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    members: list[TeamMember] = []
 
 
 @app.get("/")
@@ -236,12 +239,16 @@ async def startup_event():
 @app.post("/api/register")
 async def register_team(payload: TeamRegistration):
     try:
-        new_id = database.queries.create_team_with_members(
-            registration_number=payload.teamId,
-            email=payload.email,
-            password=payload.password,
+        captain_reg = payload.captain_reg_no or payload.password or "22BCE1001"
+        pw = payload.password or captain_reg
+        email = payload.email or f"{captain_reg.lower()}@technovit.vit.ac.in"
+        
+        database.queries.create_team_with_members(
+            registration_number=captain_reg,
+            email=email,
+            password=pw,
             team_name=payload.teamId,
-            members=payload.members,
+            members=[m.dict() for m in payload.members],
         )
         
         # Add immediately to in-memory cars

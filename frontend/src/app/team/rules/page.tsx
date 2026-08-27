@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BookOpen, AlertTriangle, Clock, Timer } from "lucide-react";
+import { BookOpen, AlertTriangle, Clock, Timer, Disc } from "lucide-react";
 
 export default function RulesPage() {
   return (
@@ -85,7 +85,7 @@ export default function RulesPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <span>🛞</span> Tire Compound Strategy & Usage Guide
+            <Disc className="h-4 w-4 text-zinc-400" /> Tire Compound Strategy & Usage Guide
           </CardTitle>
           <CardDescription>
             Detailed reasoning on which tire to select based on track state, degradation formulas, and stint strategy.

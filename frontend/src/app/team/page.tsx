@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Trophy, ArrowRight, Clock, Zap } from "lucide-react";
+import { Activity, Trophy, ArrowRight, Clock, Zap, Disc } from "lucide-react";
 import { Formula1CarSVG } from "@/components/race/formula1-car-svg";
 import { useRaceStore } from "@/lib/race-store";
 import { toast } from "sonner";
@@ -308,7 +308,7 @@ export default function TeamStrategyPage() {
             <div className="space-y-2 pt-1 border-t border-border/60">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <span>🛞</span> {action === "PIT" ? "Select Pit Stop Tire Compound:" : "Tire Compounds (Click to select for pit stop):"}
+                  <Disc className="h-3.5 w-3.5 text-zinc-400" /> {action === "PIT" ? "Select Pit Stop Tire Compound:" : "Tire Compounds (Click to select for pit stop):"}
                 </label>
                 <span className="text-[11px] font-mono text-zinc-400">
                   Target: <strong className="text-white">{action === "PIT" ? (newCompound || "Select below") : (myCar?.compound || "MEDIUM")}</strong>
