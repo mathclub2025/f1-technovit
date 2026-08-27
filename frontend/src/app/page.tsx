@@ -29,6 +29,10 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleAddTeammateField = () => {
+    if (teammates.length >= 2) {
+      toast("Squad Limit", { description: "A team can have a maximum of 3 members (1 Captain + 2 Teammates)." });
+      return;
+    }
     setTeammates([...teammates, { name: "", reg_no: "" }]);
   };
 
@@ -86,6 +90,11 @@ export default function LoginPage() {
         members.push({ name: tm.name.trim(), reg_no: tm.reg_no.trim().toUpperCase() });
       }
     });
+
+    if (members.length > 3) {
+      toast("Squad Limit Exceeded", { description: "A constructor can have a maximum of 3 members (1 Captain + 2 Teammates)." });
+      return;
+    }
 
     try {
       // 1. Register team in database via backend API
@@ -295,17 +304,19 @@ export default function LoginPage() {
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between">
                     <Label className="text-gray-300 font-semibold text-xs flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5 text-zinc-400" /> Squad Members (Optional)
+                      <Users className="h-3.5 w-3.5 text-zinc-400" /> Additional Teammates ({1 + teammates.length}/3 Max)
                     </Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleAddTeammateField}
-                      className="h-6 px-2 text-[10px] gap-1 border-white/15"
-                    >
-                      <Plus className="h-3 w-3" /> Add Member
-                    </Button>
+                    {teammates.length < 2 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAddTeammateField}
+                        className="h-6 px-2 text-[10px] gap-1 border-white/15"
+                      >
+                        <Plus className="h-3 w-3" /> Add Member
+                      </Button>
+                    )}
                   </div>
 
                   {teammates.map((tm, idx) => (

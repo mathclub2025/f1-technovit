@@ -56,6 +56,10 @@ export default function TeamDetailsPage() {
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
+    if (members.length >= 3) {
+      toast("Squad Full", { description: "A constructor can have a maximum of 3 members (1 Captain + 2 Teammates)." });
+      return;
+    }
     if (!newName.trim() || !newRegNo.trim()) {
       toast("Input Error", { description: "Please provide both teammate name and registration number." });
       return;
@@ -111,7 +115,7 @@ export default function TeamDetailsPage() {
             </div>
             <div className="pt-2 border-t border-border">
               <div className="text-xs text-muted-foreground">
-                Squad Capacity: <strong className="text-foreground">{members.length} Members Registered</strong>
+                Squad Capacity: <strong className="text-foreground">{members.length} / 3 Members Registered</strong>
               </div>
             </div>
           </CardContent>
@@ -122,18 +126,19 @@ export default function TeamDetailsPage() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4" /> Squad Roster
+                <Users className="h-4 w-4" /> Squad Roster ({members.length}/3)
               </CardTitle>
-              <CardDescription>Registered teammates and registration numbers.</CardDescription>
+              <CardDescription>Registered teammates and registration numbers (Max 3).</CardDescription>
             </div>
             <Button
               size="sm"
               variant={isAdding ? "secondary" : "outline"}
+              disabled={members.length >= 3 && !isAdding}
               onClick={() => setIsAdding(!isAdding)}
               className="h-8 gap-1 text-xs"
             >
               <Plus className="h-3.5 w-3.5" />
-              {isAdding ? "Cancel" : "Add Teammate"}
+              {members.length >= 3 ? "Squad Full (3/3)" : (isAdding ? "Cancel" : "Add Teammate")}
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
