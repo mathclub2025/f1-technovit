@@ -63,6 +63,14 @@ interface RaceState {
   clearPowers: () => void;
 }
 
+function getWebSocketUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  return apiUrl.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+}
+
 export const useRaceStore = create<RaceState>((set, get) => ({
   currentBlock: 1,
   currentLap: 0,
@@ -97,7 +105,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
       .catch(() => {});
 
     // 2. Open live WebSocket
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+    const wsUrl = getWebSocketUrl();
     const socket = new WebSocket(`${wsUrl}/ws/race${token ? `?token=${token}` : ""}`);
 
     socket.onopen = () => set({ isConnected: true, socket });
@@ -137,7 +145,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
       .catch(() => {});
 
     // 2. Open live team WebSocket
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+    const wsUrl = getWebSocketUrl();
     const socket = new WebSocket(`${wsUrl}/ws/team/${teamId}${token ? `?token=${token}` : ""}`);
 
     socket.onopen = () => set({ isConnected: true, socket });
