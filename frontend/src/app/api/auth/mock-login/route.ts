@@ -8,7 +8,7 @@ export async function POST(request: Request) {
 
     // Verify Admin Password
     if (role === "admin") {
-      const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+      const adminPassword = process.env.ADMIN_PASSWORD || "PitOrStay@28";
       if (password !== adminPassword) {
         return NextResponse.json({ error: "Invalid admin password" }, { status: 401 });
       }
