@@ -303,6 +303,56 @@ export default function TeamStrategyPage() {
                 />
               </div>
             </div>
+
+            {/* Tire Compound Selector Options */}
+            <div className="space-y-2 pt-1 border-t border-border/60">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <span>🛞</span> {action === "PIT" ? "Select Pit Stop Tire Compound:" : "Tire Compounds (Click to select for pit stop):"}
+                </label>
+                <span className="text-[11px] font-mono text-zinc-400">
+                  Target: <strong className="text-white">{action === "PIT" ? (newCompound || "Select below") : (myCar?.compound || "MEDIUM")}</strong>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { id: "SOFT", label: "Soft", code: "S", dot: "bg-red-500", border: "border-red-500/80 bg-red-950/20" },
+                  { id: "MEDIUM", label: "Medium", code: "M", dot: "bg-yellow-400", border: "border-yellow-500/80 bg-yellow-950/20" },
+                  { id: "HARD", label: "Hard", code: "H", dot: "bg-white", border: "border-zinc-300/80 bg-zinc-800/40" },
+                  { id: "INTER", label: "Inter", code: "I", dot: "bg-green-500", border: "border-green-500/80 bg-green-950/20" },
+                  { id: "WET", label: "Wet", code: "W", dot: "bg-blue-600", border: "border-blue-500/80 bg-blue-950/20" },
+                ].map((comp) => {
+                  const isSelected = action === "PIT" ? newCompound === comp.id : myCar?.compound === comp.id;
+                  return (
+                    <button
+                      key={comp.id}
+                      type="button"
+                      disabled={!windowOpen || myCar?.has_submitted}
+                      onClick={() => {
+                        if (!windowOpen || myCar?.has_submitted) return;
+                        setNewCompound(comp.id);
+                        if (action === "STAY_OUT") {
+                          setAction("PIT");
+                          if (!targetLap) setTargetLap(String(currentLap + 1));
+                        }
+                      }}
+                      className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? `${comp.border} shadow-[0_0_12px_rgba(255,255,255,0.15)] ring-1 ring-white/40`
+                          : "border-border bg-card/60 hover:bg-muted/50 hover:border-zinc-600"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`w-2.5 h-2.5 rounded-full ${comp.dot}`} />
+                        <span className="font-mono font-black text-xs text-white">{comp.code}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-medium">{comp.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
