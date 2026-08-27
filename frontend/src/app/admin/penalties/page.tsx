@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShieldAlert, Plus } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 
 interface PenaltyLogEntry {
@@ -41,7 +42,7 @@ export default function PenaltiesPage() {
 
     try {
       const token = localStorage.getItem("race_token");
-      await fetch("/api/admin/god-mode", {
+      await fetch(getApiUrl("/api/admin/god-mode"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({

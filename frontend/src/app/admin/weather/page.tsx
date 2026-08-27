@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Sun, CloudRain, CloudDrizzle } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 
 export default function WeatherPage() {
@@ -13,7 +14,7 @@ export default function WeatherPage() {
   const handleSetWeather = async (state: "DRY" | "WET" | "DRYING") => {
     const token = localStorage.getItem("race_token");
     try {
-      const res = await fetch("/api/admin/track-state", {
+      const res = await fetch(getApiUrl("/api/admin/track-state"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ track_state: state })

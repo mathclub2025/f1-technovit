@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Shield, Plus, Trash2, Users } from "lucide-react";
+import { getApiUrl } from "@/lib/api-config";
 
 interface TeammateInput {
   name: string;
@@ -52,22 +53,26 @@ export default function LoginPage() {
 
     const teamIdStr = selectedTeam.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-    const res = await fetch("/api/auth/mock-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        email: `${teamIdStr}@f1.com`, 
-        role: "team", 
-        teamId: teamIdStr,
-        password: password.trim().toUpperCase()
-      })
-    });
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem("race_token", data.token);
-      router.push("/team");
-    } else {
-      toast("Authentication Failed", { description: data.error || "Please check your Team Name and Captain Reg. No." });
+    try {
+      const res = await fetch(getApiUrl("/api/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: `${teamIdStr}@f1.com`, 
+          role: "team", 
+          teamId: teamIdStr,
+          password: password.trim().toUpperCase()
+        })
+      });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("race_token", data.token);
+        router.push("/team");
+      } else {
+        toast("Authentication Failed", { description: data.detail || data.error || "Please check your Team Name and Captain Reg. No." });
+      }
+    } catch (err) {
+      toast("Network Error", { description: "Failed to connect to race server." });
     }
   };
 
@@ -98,7 +103,7 @@ export default function LoginPage() {
 
     try {
       // 1. Register team in database via backend API
-      await fetch("/api/register", {
+      await fetch(getApiUrl("/api/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,47 +117,55 @@ export default function LoginPage() {
       });
     } catch (e) {}
 
-    // 2. Obtain authenticated session token
-    const res = await fetch("/api/auth/mock-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        email: `${cleanCaptainReg.toLowerCase()}@technovit.vit.ac.in`, 
-        role: "team", 
-        teamId: teamIdStr,
-        password: cleanCaptainReg,
-        members: members
-      })
-    });
-    
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem("race_token", data.token);
-      localStorage.setItem("team_members", JSON.stringify(members));
-      router.push("/team");
-    } else {
-      toast("Error", { description: data.error || "Registration failed." });
+    try {
+      // 2. Obtain authenticated session token
+      const res = await fetch(getApiUrl("/api/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: `${cleanCaptainReg.toLowerCase()}@technovit.vit.ac.in`, 
+          role: "team", 
+          teamId: teamIdStr,
+          password: cleanCaptainReg,
+          members: members
+        })
+      });
+      
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("race_token", data.token);
+        localStorage.setItem("team_members", JSON.stringify(members));
+        router.push("/team");
+      } else {
+        toast("Error", { description: data.detail || data.error || "Registration failed." });
+      }
+    } catch (err) {
+      toast("Network Error", { description: "Failed to connect to race server." });
     }
   };
 
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const res = await fetch("/api/auth/mock-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        email: "admin@technovit.com", 
-        role: "admin", 
-        password: password 
-      })
-    });
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem("race_token", data.token);
-      router.push("/admin");
-    } else {
-      toast("Error", { description: data.error || "Invalid director credentials." });
+    try {
+      const res = await fetch(getApiUrl("/api/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: "admin@technovit.com", 
+          role: "admin", 
+          password: password 
+        })
+      });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("race_token", data.token);
+        router.push("/admin");
+      } else {
+        toast("Error", { description: data.detail || data.error || "Invalid director credentials." });
+      }
+    } catch (err) {
+      toast("Network Error", { description: "Failed to connect to race server." });
     }
   };
 

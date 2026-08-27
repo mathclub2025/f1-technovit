@@ -55,6 +55,37 @@ app.add_middleware(
 )
 
 
+class LoginRequest(BaseModel):
+    email: Optional[str] = None
+    role: Optional[str] = "team"
+    teamId: Optional[str] = None
+    password: Optional[str] = None
+    members: Optional[List[Any]] = None
+
+
+@app.post("/api/auth/login")
+@app.post("/api/auth/mock-login")
+async def auth_login(payload: LoginRequest):
+    admin_password = os.getenv("ADMIN_PASSWORD", "PitOrStay@28")
+    if payload.role == "admin":
+        if payload.password != admin_password:
+            raise HTTPException(status_code=401, detail="Invalid admin password")
+    
+    secret = os.getenv("SHARED_JWT_SECRET", "technovit_f1_shared_jwt_secret_key_2026")
+    try:
+        from jose import jwt
+    except ImportError:
+        import jwt
+
+    token_data = {
+        "email": payload.email or (f"{payload.teamId}@f1.com" if payload.teamId else "admin@technovit.com"),
+        "teamId": payload.teamId or None,
+        "role": payload.role or "team",
+    }
+    encoded_token = jwt.encode(token_data, secret, algorithm="HS256")
+    return {"token": encoded_token}
+
+
 # -----------------------------------------------------------------------------
 # In-Memory Event State
 # -----------------------------------------------------------------------------

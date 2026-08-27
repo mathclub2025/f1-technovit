@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getApiUrl } from "./api-config";
 
 interface StandingsRow {
   position: number;
@@ -91,7 +92,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
 
   connectRace: (token?: string) => {
     // 1. Instant REST sync on load
-    fetch("/api/standings")
+    fetch(getApiUrl("/api/standings"))
       .then((res) => res.json())
       .then((data) => {
         if (data.current_block !== undefined) set({ currentBlock: data.current_block });
@@ -131,7 +132,7 @@ export const useRaceStore = create<RaceState>((set, get) => ({
 
   connectTeam: (teamId: string, token?: string) => {
     // 1. Instant REST sync on load
-    fetch("/api/standings")
+    fetch(getApiUrl("/api/standings"))
       .then((res) => res.json())
       .then((data) => {
         if (data.current_block !== undefined) set({ currentBlock: data.current_block });

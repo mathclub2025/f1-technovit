@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Trophy, ArrowRight, Clock, Zap, Disc } from "lucide-react";
 import { Formula1CarSVG } from "@/components/race/formula1-car-svg";
 import { useRaceStore } from "@/lib/race-store";
+import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 
 export default function TeamStrategyPage() {
@@ -51,7 +52,7 @@ export default function TeamStrategyPage() {
 
     // Heartbeat poll for fast window open / lock sync
     const poll = setInterval(() => {
-      fetch("/api/standings")
+      fetch(getApiUrl("/api/standings"))
         .then((res) => res.json())
         .then((data) => {
           if (data.current_block !== undefined) useRaceStore.setState({ currentBlock: data.current_block });
@@ -120,7 +121,7 @@ export default function TeamStrategyPage() {
     };
 
     try {
-      const res = await fetch("/api/strategy/submit", {
+      const res = await fetch(getApiUrl("/api/strategy/submit"), {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

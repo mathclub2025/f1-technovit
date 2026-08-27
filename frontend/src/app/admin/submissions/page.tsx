@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Users, Edit3, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 
 export default function SubmissionsPage() {
@@ -33,7 +34,7 @@ export default function SubmissionsPage() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem("race_token");
-      await fetch("/api/admin/override-strategy", {
+      await fetch(getApiUrl("/api/admin/override-strategy"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -60,7 +61,7 @@ export default function SubmissionsPage() {
   const handleForceSubmitTeam = async (teamId: string) => {
     try {
       const token = localStorage.getItem("race_token");
-      await fetch("/api/admin/force-submit", {
+      await fetch(getApiUrl("/api/admin/force-submit"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -77,7 +78,7 @@ export default function SubmissionsPage() {
   const handleForceSubmitAll = async () => {
     try {
       const token = localStorage.getItem("race_token");
-      await fetch("/api/admin/force-submit", {
+      await fetch(getApiUrl("/api/admin/force-submit"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

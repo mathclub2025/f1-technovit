@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Clock, Play, Flag, SkipForward, Monitor } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
+import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 
 export default function AdminOverviewPage() {
@@ -35,7 +36,7 @@ export default function AdminOverviewPage() {
 
     // Lightweight sync heartbeat
     const poll = setInterval(() => {
-      fetch("/api/standings")
+      fetch(getApiUrl("/api/standings"))
         .then((res) => res.json())
         .then((data) => {
           if (data.current_block !== undefined) useRaceStore.setState({ currentBlock: data.current_block });
@@ -83,7 +84,7 @@ export default function AdminOverviewPage() {
     }
 
     try {
-      const res = await fetch("/api/admin/init-grid", {
+      const res = await fetch(getApiUrl("/api/admin/init-grid"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: payload ? JSON.stringify(payload) : undefined
@@ -102,7 +103,7 @@ export default function AdminOverviewPage() {
   const handleStartWindow = async () => {
     const token = localStorage.getItem("race_token");
     try {
-      const res = await fetch("/api/admin/start-window", {
+      const res = await fetch(getApiUrl("/api/admin/start-window"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ duration_seconds: 180, block_number: currentBlock })
@@ -122,7 +123,7 @@ export default function AdminOverviewPage() {
     const token = localStorage.getItem("race_token");
     try {
       toast.info(`Executing Block ${currentBlock}...`, { description: `Simulating Laps ${currentLap + 1} to ${currentLap + 5}.` });
-      const res = await fetch("/api/admin/execute-block", {
+      const res = await fetch(getApiUrl("/api/admin/execute-block"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
@@ -148,7 +149,7 @@ export default function AdminOverviewPage() {
   const handleForceClose = async () => {
     const token = localStorage.getItem("race_token");
     try {
-      const res = await fetch("/api/admin/force-submit", {
+      const res = await fetch(getApiUrl("/api/admin/force-submit"), {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
