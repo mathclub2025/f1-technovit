@@ -180,28 +180,12 @@ export default function AdminOverviewPage() {
         description="Monitor race state, team submissions, and manage the Grand Prix."
         actions={
           <div className="flex gap-2 items-center">
-            <input 
-              type="text" 
-              placeholder="e.g. Alpha, Beta, Delta..."
-              value={customTeams}
-              onChange={(e) => setCustomTeams(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-black/50 border border-white/10 rounded-md text-white focus:outline-none focus:ring-1 focus:ring-red-600 w-48"
-              title="Comma-separated list of team names formed today"
-            />
-            <Button onClick={handleInitGrid} variant="outline" size="sm" className="gap-1.5">
-              <Flag className="h-3.5 w-3.5" /> Setup Race Grid
-            </Button>
             <Button onClick={handleStartWindow} variant="secondary" size="sm" className="gap-1.5" disabled={windowOpen}>
               <Play className="h-3.5 w-3.5" /> Start Window
             </Button>
             <Button onClick={handleExecuteBlock} size="sm" className="gap-1.5" disabled={windowOpen && timeLeft > 0}>
               <SkipForward className="h-3.5 w-3.5" /> Execute Block {currentBlock}
             </Button>
-            <Link href="/race" target="_blank">
-              <Button variant="default" size="sm" className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-bold">
-                <Monitor className="h-3.5 w-3.5" /> Projector View (/race)
-              </Button>
-            </Link>
           </div>
         }
       />
