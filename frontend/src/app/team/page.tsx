@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Trophy, ArrowRight, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Activity, Trophy, ArrowRight, Clock, Zap } from "lucide-react";
 import { useRaceStore } from "@/lib/race-store";
 import { toast } from "sonner";
 
@@ -154,7 +155,7 @@ export default function TeamStrategyPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Current Status */}
+        {/* Left: Current Status */}
         <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -189,13 +190,13 @@ export default function TeamStrategyPage() {
           </CardContent>
         </Card>
 
-        {/* Strategy Form */}
+        {/* Right: Strategy Input */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">Strategy Input</CardTitle>
             <CardDescription>
               {windowOpen 
-                ? "Select your preferred strategy and optional tactical superpower for the upcoming block." 
+                ? "Select your driver action for the upcoming 5-lap block." 
                 : "Submission window is closed. Waiting for race block execution."}
             </CardDescription>
           </CardHeader>
@@ -265,220 +266,184 @@ export default function TeamStrategyPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
 
-            {/* Tactical Superpowers Section */}
-            <div className="border-t border-border pt-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Separate Row: Available Powers (Matching Admin Powers Table Style) */}
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Zap className="h-4 w-4 text-purple-400" /> Available Powers
+              </CardTitle>
+              <CardDescription>
+                Deploy your 1-time tactical superpower to gain a mathematical edge or disrupt rivals for this 5-lap block.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Status:</span>
+              <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded border ${
+                myCar?.has_used_power 
+                  ? "bg-zinc-900 border-zinc-700 text-zinc-400" 
+                  : selectedPower !== "NONE" 
+                  ? "bg-purple-950 border-purple-500 text-purple-300 animate-pulse" 
+                  : "bg-emerald-950/60 border-emerald-500/50 text-emerald-300"
+              }`}>
+                {myCar?.has_used_power 
+                  ? `REDEEMED (${myCar.active_power || "USED"})` 
+                  : selectedPower !== "NONE" 
+                  ? `QUEUED: ${selectedPower}` 
+                  : "AVAILABLE TO USE"}
+              </span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {myCar?.has_used_power ? (
+            <div className="p-4 bg-zinc-900/60 rounded-xl border border-border text-sm text-muted-foreground flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔒</span>
                 <div>
-                  <h3 className="text-base font-bold flex items-center gap-2">
-                    <span className="text-purple-400">⚡</span> Tactical Superpowers
-                    <span className="text-xs text-muted-foreground font-normal">(1-Time Activation Per Grand Prix)</span>
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Deploy a legendary driver power to gain a mathematical edge or disrupt rivals for this 5-lap block.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Status:</span>
-                  <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded border ${
-                    myCar?.has_used_power 
-                      ? "bg-zinc-900 border-zinc-700 text-zinc-400" 
-                      : selectedPower !== "NONE" 
-                      ? "bg-purple-950 border-purple-500 text-purple-300 animate-pulse" 
-                      : "bg-emerald-950/60 border-emerald-500/50 text-emerald-300"
-                  }`}>
-                    {myCar?.has_used_power 
-                      ? `REDEEMED (${myCar.active_power || "USED"})` 
-                      : selectedPower !== "NONE" 
-                      ? `QUEUED: ${selectedPower}` 
-                      : "AVAILABLE TO USE"}
-                  </span>
+                  <div className="font-semibold text-zinc-300">Superpower Redeemed</div>
+                  <div className="text-xs text-zinc-500">Your team has already utilized its 1-time tactical superpower for this Grand Prix.</div>
                 </div>
               </div>
-
-              {myCar?.has_used_power ? (
-                <div className="p-4 bg-zinc-900/60 rounded-xl border border-border text-sm text-muted-foreground flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">🔒</span>
-                    <div>
-                      <div className="font-semibold text-zinc-300">Superpower Redeemed</div>
-                      <div className="text-xs text-zinc-500">Your team has already utilized its 1-time tactical superpower for this Grand Prix.</div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-mono uppercase bg-zinc-800 text-zinc-400 px-2 py-1 rounded">Locked</span>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {/* Hammertime */}
-                    <div 
-                      onClick={() => !myCar?.has_submitted && windowOpen && setSelectedPower(selectedPower === "HAMMERTIME" ? "NONE" : "HAMMERTIME")}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                        selectedPower === "HAMMERTIME"
-                          ? "border-purple-500 bg-purple-950/40 shadow-[0_0_15px_rgba(168,85,247,0.25)] ring-1 ring-purple-500"
-                          : "border-border bg-card/60 hover:bg-muted/40 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-lg">🔨</span>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedPower === "HAMMERTIME" ? "bg-purple-600 text-white" : "bg-zinc-800 text-zinc-400"
-                          }`}>
-                            {selectedPower === "HAMMERTIME" ? "SELECTED" : "OFFENSIVE"}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-sm text-foreground">Hammertime</h4>
-                        <p className="text-[11px] text-purple-300 font-medium">Lewis Hamilton</p>
-                        <p className="text-xs text-muted-foreground mt-2 leading-snug">
-                          Freezes tire degradation coefficient at <strong className="text-zinc-200">x = 1</strong> for all 5 laps. Full fresh-rubber grip regardless of tire age.
-                        </p>
-                      </div>
-                      <Button 
-                        size="sm" 
+              <span className="text-xs font-mono uppercase bg-zinc-800 text-zinc-400 px-2.5 py-1 rounded">Locked</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2.5 px-3 text-muted-foreground font-medium w-[260px]">Power</th>
+                    <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">Effect</th>
+                    <th className="text-right py-2.5 px-3 text-muted-foreground font-medium w-[120px]">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Hammertime */}
+                  <tr className={`border-b border-border hover:bg-muted/40 transition-colors ${selectedPower === "HAMMERTIME" ? "bg-purple-950/20" : ""}`}>
+                    <td className="py-3 px-3 font-medium">
+                      Lewis Hamilton (Hammertime)
+                      <br />
+                      <Badge variant="secondary" className="mt-1 text-[10px] bg-purple-900/40 text-purple-300 border border-purple-500/30">Offensive</Badge>
+                    </td>
+                    <td className="py-3 px-3 text-muted-foreground">
+                      Forces tire age <strong className="text-foreground">x = 1</strong> for all 5 laps, ignoring actual tire degradation and preserving maximum grip.
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Button
+                        size="sm"
                         variant={selectedPower === "HAMMERTIME" ? "default" : "outline"}
-                        className={`w-full mt-3 h-8 text-xs ${selectedPower === "HAMMERTIME" ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}`}
+                        className={`h-8 px-3 text-xs ${selectedPower === "HAMMERTIME" ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}`}
+                        onClick={() => setSelectedPower(selectedPower === "HAMMERTIME" ? "NONE" : "HAMMERTIME")}
                         disabled={!windowOpen || myCar?.has_submitted}
                       >
-                        {selectedPower === "HAMMERTIME" ? "✓ Redeemed for Block" : "Redeem Hammertime"}
+                        {selectedPower === "HAMMERTIME" ? "✓ Queued" : "Queue"}
                       </Button>
-                    </div>
+                    </td>
+                  </tr>
 
-                    {/* Blitzkrieg */}
-                    <div 
-                      onClick={() => !myCar?.has_submitted && windowOpen && setSelectedPower(selectedPower === "BLITZKRIEG" ? "NONE" : "BLITZKRIEG")}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                        selectedPower === "BLITZKRIEG"
-                          ? "border-amber-500 bg-amber-950/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] ring-1 ring-amber-500"
-                          : "border-border bg-card/60 hover:bg-muted/40 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-lg">⚡</span>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedPower === "BLITZKRIEG" ? "bg-amber-600 text-black" : "bg-zinc-800 text-zinc-400"
-                          }`}>
-                            {selectedPower === "BLITZKRIEG" ? "SELECTED" : "PIT STRATEGY"}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-sm text-foreground">Blitzkrieg</h4>
-                        <p className="text-[11px] text-amber-300 font-medium">Max Verstappen</p>
-                        <p className="text-xs text-muted-foreground mt-2 leading-snug">
-                          Pit stop penalty slashed to flat <strong className="text-zinc-200">10.00s</strong> (saving 10s) with 100% immunity to pitlane traffic congestion.
-                        </p>
-                      </div>
-                      <Button 
-                        size="sm" 
+                  {/* Blitzkrieg */}
+                  <tr className={`border-b border-border hover:bg-muted/40 transition-colors ${selectedPower === "BLITZKRIEG" ? "bg-amber-950/20" : ""}`}>
+                    <td className="py-3 px-3 font-medium">
+                      Max Verstappen (Blitzkrieg)
+                      <br />
+                      <Badge variant="secondary" className="mt-1 text-[10px] bg-amber-900/40 text-amber-300 border border-amber-500/30">Pit Strategy</Badge>
+                    </td>
+                    <td className="py-3 px-3 text-muted-foreground">
+                      Flat <strong className="text-foreground">10.00s</strong> pit stop delta and complete immunity from pitlane traffic congestion penalties (+6.00s).
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Button
+                        size="sm"
                         variant={selectedPower === "BLITZKRIEG" ? "default" : "outline"}
-                        className={`w-full mt-3 h-8 text-xs ${selectedPower === "BLITZKRIEG" ? "bg-amber-500 hover:bg-amber-600 text-black font-bold" : ""}`}
+                        className={`h-8 px-3 text-xs ${selectedPower === "BLITZKRIEG" ? "bg-amber-500 hover:bg-amber-600 text-black font-bold" : ""}`}
+                        onClick={() => setSelectedPower(selectedPower === "BLITZKRIEG" ? "NONE" : "BLITZKRIEG")}
                         disabled={!windowOpen || myCar?.has_submitted}
                       >
-                        {selectedPower === "BLITZKRIEG" ? "✓ Redeemed for Block" : "Redeem Blitzkrieg"}
+                        {selectedPower === "BLITZKRIEG" ? "✓ Queued" : "Queue"}
                       </Button>
-                    </div>
+                    </td>
+                  </tr>
 
-                    {/* Rainmaster */}
-                    <div 
-                      onClick={() => !myCar?.has_submitted && windowOpen && setSelectedPower(selectedPower === "RAINMASTER" ? "NONE" : "RAINMASTER")}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                        selectedPower === "RAINMASTER"
-                          ? "border-blue-500 bg-blue-950/40 shadow-[0_0_15px_rgba(59,130,246,0.25)] ring-1 ring-blue-500"
-                          : "border-border bg-card/60 hover:bg-muted/40 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-lg">🌧️</span>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedPower === "RAINMASTER" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-                          }`}>
-                            {selectedPower === "RAINMASTER" ? "SELECTED" : "WEATHER"}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-sm text-foreground">Rainmaster</h4>
-                        <p className="text-[11px] text-blue-300 font-medium">Michael Schumacher</p>
-                        <p className="text-xs text-muted-foreground mt-2 leading-snug">
-                          Wet track slick penalty reduced from <strong className="text-zinc-200">+12.00s down to +2.00s</strong>. Brave the rain on slicks without losing time.
-                        </p>
-                      </div>
-                      <Button 
-                        size="sm" 
+                  {/* Rainmaster */}
+                  <tr className={`border-b border-border hover:bg-muted/40 transition-colors ${selectedPower === "RAINMASTER" ? "bg-blue-950/20" : ""}`}>
+                    <td className="py-3 px-3 font-medium">
+                      Michael Schumacher (Rainmaster)
+                      <br />
+                      <Badge variant="secondary" className="mt-1 text-[10px] bg-blue-900/40 text-blue-300 border border-blue-500/30">Weather</Badge>
+                    </td>
+                    <td className="py-3 px-3 text-muted-foreground">
+                      Reduces wet-on-slicks penalty from <strong className="text-foreground">+12.00s down to +2.00s</strong> per lap on a wet track.
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Button
+                        size="sm"
                         variant={selectedPower === "RAINMASTER" ? "default" : "outline"}
-                        className={`w-full mt-3 h-8 text-xs ${selectedPower === "RAINMASTER" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
+                        className={`h-8 px-3 text-xs ${selectedPower === "RAINMASTER" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
+                        onClick={() => setSelectedPower(selectedPower === "RAINMASTER" ? "NONE" : "RAINMASTER")}
                         disabled={!windowOpen || myCar?.has_submitted}
                       >
-                        {selectedPower === "RAINMASTER" ? "✓ Redeemed for Block" : "Redeem Rainmaster"}
+                        {selectedPower === "RAINMASTER" ? "✓ Queued" : "Queue"}
                       </Button>
-                    </div>
+                    </td>
+                  </tr>
 
-                    {/* Plan E */}
-                    <div 
-                      onClick={() => !myCar?.has_submitted && windowOpen && setSelectedPower(selectedPower === "PLAN_E" ? "NONE" : "PLAN_E")}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                        selectedPower === "PLAN_E"
-                          ? "border-emerald-500 bg-emerald-950/40 shadow-[0_0_15px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500"
-                          : "border-border bg-card/60 hover:bg-muted/40 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-lg">🎲</span>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedPower === "PLAN_E" ? "bg-emerald-600 text-white" : "bg-zinc-800 text-zinc-400"
-                          }`}>
-                            {selectedPower === "PLAN_E" ? "SELECTED" : "GAMBLE"}
-                          </span>
+                  {/* Plan E */}
+                  <tr className={`border-b border-border hover:bg-muted/40 transition-colors ${selectedPower === "PLAN_E" ? "bg-emerald-950/20" : ""}`}>
+                    <td className="py-3 px-3 font-medium">
+                      Charles Leclerc (Plan E)
+                      <br />
+                      <Badge variant="secondary" className="mt-1 text-[10px] bg-emerald-900/40 text-emerald-300 border border-emerald-500/30">Tactical</Badge>
+                    </td>
+                    <td className="py-3 px-3 text-muted-foreground">
+                      Sets pit penalty to exact die-roll value (<strong className="text-foreground">5.00s success / 30.00s fail</strong>).
+                      {selectedPower === "PLAN_E" && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-white">Die-roll Pit Penalty:</span>
+                          <Select value={planEPenalty} onValueChange={(v) => setPlanEPenalty(v ?? "5")} disabled={!windowOpen || myCar?.has_submitted}>
+                            <SelectTrigger className="h-8 w-[150px]">
+                              <SelectValue placeholder="Penalty" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">5.00s (Success)</SelectItem>
+                              <SelectItem value="30">30.00s (Fail)</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <h4 className="font-bold text-sm text-foreground">Plan E</h4>
-                        <p className="text-[11px] text-emerald-300 font-medium">Charles Leclerc</p>
-                        <p className="text-xs text-muted-foreground mt-2 leading-snug">
-                          High-risk pit gamble. Success results in an ultra-fast <strong className="text-zinc-200">5.00s</strong> stop; failure yields <strong className="text-zinc-200">30.00s</strong>.
-                        </p>
-                      </div>
-                      <Button 
-                        size="sm" 
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Button
+                        size="sm"
                         variant={selectedPower === "PLAN_E" ? "default" : "outline"}
-                        className={`w-full mt-3 h-8 text-xs ${selectedPower === "PLAN_E" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
+                        className={`h-8 px-3 text-xs ${selectedPower === "PLAN_E" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
+                        onClick={() => setSelectedPower(selectedPower === "PLAN_E" ? "NONE" : "PLAN_E")}
                         disabled={!windowOpen || myCar?.has_submitted}
                       >
-                        {selectedPower === "PLAN_E" ? "✓ Redeemed for Block" : "Redeem Plan E"}
+                        {selectedPower === "PLAN_E" ? "✓ Queued" : "Queue"}
                       </Button>
-                    </div>
+                    </td>
+                  </tr>
 
-                    {/* Minister of Defence */}
-                    <div 
-                      onClick={() => !myCar?.has_submitted && windowOpen && setSelectedPower(selectedPower === "MINISTER_OF_DEFENCE" ? "NONE" : "MINISTER_OF_DEFENCE")}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between md:col-span-2 lg:col-span-2 ${
-                        selectedPower === "MINISTER_OF_DEFENCE"
-                          ? "border-red-500 bg-red-950/40 shadow-[0_0_15px_rgba(239,68,68,0.25)] ring-1 ring-red-500"
-                          : "border-border bg-card/60 hover:bg-muted/40 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">🛡️</span>
-                            <h4 className="font-bold text-sm text-foreground">Minister of Defence</h4>
-                          </div>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedPower === "MINISTER_OF_DEFENCE" ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-400"
-                          }`}>
-                            {selectedPower === "MINISTER_OF_DEFENCE" ? "SELECTED" : "DEFENSIVE BLOCK"}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-red-300 font-medium">Fernando Alonso</p>
-                        <p className="text-xs text-muted-foreground mt-1 leading-snug">
-                          Target an opponent team to <strong className="text-red-300">block their pit entry</strong> for this block. If they attempt to pit, their stop is rejected!
-                        </p>
-                      </div>
-
+                  {/* Minister of Defence */}
+                  <tr className={`border-b-0 hover:bg-muted/40 transition-colors ${selectedPower === "MINISTER_OF_DEFENCE" ? "bg-red-950/20" : ""}`}>
+                    <td className="py-3 px-3 font-medium">
+                      Fernando Alonso (Minister of Defence)
+                      <br />
+                      <Badge variant="secondary" className="mt-1 text-[10px] bg-red-900/40 text-red-300 border border-red-500/30">Defensive</Badge>
+                    </td>
+                    <td className="py-3 px-3 text-muted-foreground">
+                      Closes pit entry and blocks pit execution for the selected target team.
                       {selectedPower === "MINISTER_OF_DEFENCE" && (
-                        <div className="mt-3 p-2.5 bg-black/50 border border-red-500/40 rounded-lg space-y-1.5 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
-                          <label className="text-xs font-semibold text-red-300">Choose Target Opponent Team to Block:</label>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-white">Target Opponent:</span>
                           <Select value={alonsoTarget} onValueChange={(v) => setAlonsoTarget(v ?? "")} disabled={!windowOpen || myCar?.has_submitted}>
-                            <SelectTrigger className="bg-background h-8 text-xs">
-                              <SelectValue placeholder="Select target opponent..." />
+                            <SelectTrigger className="h-8 w-[200px]">
+                              <SelectValue placeholder="Select Target..." />
                             </SelectTrigger>
                             <SelectContent>
                               {otherCars.map((c) => (
@@ -488,52 +453,47 @@ export default function TeamStrategyPage() {
                           </Select>
                         </div>
                       )}
-
-                      <Button 
-                        size="sm" 
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Button
+                        size="sm"
                         variant={selectedPower === "MINISTER_OF_DEFENCE" ? "default" : "outline"}
-                        className={`w-full mt-3 h-8 text-xs ${selectedPower === "MINISTER_OF_DEFENCE" ? "bg-red-600 hover:bg-red-700 text-white" : ""}`}
+                        className={`h-8 px-3 text-xs ${selectedPower === "MINISTER_OF_DEFENCE" ? "bg-red-600 hover:bg-red-700 text-white" : ""}`}
+                        onClick={() => setSelectedPower(selectedPower === "MINISTER_OF_DEFENCE" ? "NONE" : "MINISTER_OF_DEFENCE")}
                         disabled={!windowOpen || myCar?.has_submitted}
                       >
-                        {selectedPower === "MINISTER_OF_DEFENCE" ? "✓ Redeemed for Block" : "Redeem Minister of Defence"}
+                        {selectedPower === "MINISTER_OF_DEFENCE" ? "✓ Queued" : "Queue"}
                       </Button>
-                    </div>
-                  </div>
-
-                  {selectedPower !== "NONE" && (
-                    <div className="flex items-center justify-between px-3 py-2 bg-purple-950/30 border border-purple-500/30 rounded-lg text-xs">
-                      <span className="text-purple-300 font-medium flex items-center gap-1.5">
-                        <span>⚡</span> Queued: <strong>{selectedPower}</strong>
-                      </span>
-                      <button 
-                        type="button"
-                        onClick={() => setSelectedPower("NONE")} 
-                        className="text-xs text-zinc-400 hover:text-white underline cursor-pointer"
-                      >
-                        Cancel & Save Power for Later
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </CardContent>
-          <CardFooter className="flex-col items-stretch gap-2">
-            <Button 
-              className="w-full gap-1.5" 
-              onClick={handleSubmit} 
-              disabled={
-                !windowOpen || 
-                myCar?.has_submitted || 
-                (action === "PIT" && (!targetLap || !newCompound)) ||
-                (selectedPower === "MINISTER_OF_DEFENCE" && !alonsoTarget)
-              }
-            >
-              {myCar?.has_submitted ? "Strategy Locked In" : "Confirm Submission"}
-              {!myCar?.has_submitted && <ArrowRight className="size-4" />}
-            </Button>
-          </CardFooter>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Master Confirm Submission Button */}
+      <div className="flex flex-col gap-2">
+        <Button 
+          size="lg"
+          className="w-full h-12 text-base font-bold gap-2 shadow-lg" 
+          onClick={handleSubmit} 
+          disabled={
+            !windowOpen || 
+            myCar?.has_submitted || 
+            (action === "PIT" && (!targetLap || !newCompound)) ||
+            (selectedPower === "MINISTER_OF_DEFENCE" && !alonsoTarget)
+          }
+        >
+          {myCar?.has_submitted ? "Strategy & Powers Locked In" : "Confirm Submission"}
+          {!myCar?.has_submitted && <ArrowRight className="size-5" />}
+        </Button>
+        {selectedPower !== "NONE" && !myCar?.has_submitted && (
+          <p className="text-xs text-center text-purple-300">
+            Submitting will lock in your strategy + activate <strong className="uppercase">{selectedPower}</strong> for the upcoming block.
+          </p>
+        )}
       </div>
 
       {/* Leaderboard */}
