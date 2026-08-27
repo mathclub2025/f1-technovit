@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Trophy, ArrowRight, Clock, Zap } from "lucide-react";
+import { Formula1CarSVG } from "@/components/race/formula1-car-svg";
 import { useRaceStore } from "@/lib/race-store";
 import { toast } from "sonner";
 
@@ -99,6 +100,10 @@ export default function TeamStrategyPage() {
 
   const myPos = myStandings?.position || "--";
   const myGap = (myStandings?.gap_to_ahead ?? 0).toFixed(3);
+
+  const defaultColors = ["#dc0000", "#1e41ff", "#00d2be", "#ff8700", "#006f62", "#0090ff", "#005aff", "#f0f0f0"];
+  const numPos = typeof myPos === "number" ? myPos : 1;
+  const teamColor = defaultColors[(numPos - 1) % defaultColors.length] || "#dc0000";
 
   const handleSubmit = async () => {
     const token = localStorage.getItem("race_token");
@@ -266,6 +271,38 @@ export default function TeamStrategyPage() {
                 </div>
               </div>
             )}
+
+            {/* Team Car HUD Model Display */}
+            <div className="p-3.5 rounded-xl border border-white/10 bg-[#09090b]/80 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-inner">
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">
+                    {myCar?.driver || teamId || "Grand Prix Challenger"}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] font-mono border-white/20 text-zinc-400">
+                    P{myPos} &bull; #{numPos}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                  <span>Current: <strong className="text-zinc-200">{myCar?.compound || "MEDIUM"}</strong> ({myCar?.tire_age || 0} Laps)</span>
+                  <span>&bull;</span>
+                  <span className={action === "PIT" ? "text-amber-400 font-bold" : "text-emerald-400 font-medium"}>
+                    {action === "PIT" ? `PIT STOP: LAP ${targetLap || "?"} (${newCompound || "SELECT"})` : "STAYING OUT ON TRACK"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="relative py-1 px-3 flex items-center justify-center shrink-0">
+                <Formula1CarSVG
+                  color={teamColor}
+                  carNumber={numPos}
+                  facing="right"
+                  className="w-36 h-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]"
+                  glow={true}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
