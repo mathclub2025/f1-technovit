@@ -320,8 +320,8 @@ export default function TeamStrategyPage() {
                   { id: "SOFT", label: "Soft", code: "S", dot: "bg-red-500", border: "border-red-500/80 bg-red-950/20" },
                   { id: "MEDIUM", label: "Medium", code: "M", dot: "bg-yellow-400", border: "border-yellow-500/80 bg-yellow-950/20" },
                   { id: "HARD", label: "Hard", code: "H", dot: "bg-white", border: "border-zinc-300/80 bg-zinc-800/40" },
-                  { id: "INTER", label: "Inter", code: "I", dot: "bg-green-500", border: "border-green-500/80 bg-green-950/20" },
-                  { id: "WET", label: "Wet", code: "W", dot: "bg-blue-600", border: "border-blue-500/80 bg-blue-950/20" },
+                  { id: "INTER", label: "Intermediate", code: "I", dot: "bg-green-500", border: "border-green-500/80 bg-green-950/20" },
+                  { id: "WET", label: "Full Wet", code: "W", dot: "bg-blue-600", border: "border-blue-500/80 bg-blue-950/20" },
                 ].map((comp) => {
                   const isSelected = action === "PIT" ? newCompound === comp.id : myCar?.compound === comp.id;
                   return (
