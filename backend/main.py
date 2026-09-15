@@ -214,6 +214,10 @@ class AdminStrategyOverride(BaseModel):
     pit_lap: Optional[int] = None
     new_compound: Optional[Compound] = None
 
+
+class DeleteTeamPayload(BaseModel):
+    team_id: str
+
 class TeamMember(BaseModel):
     name: str
     reg_no: Optional[str] = None
@@ -646,6 +650,78 @@ async def admin_override_strategy(
         "message": f"Strategy overridden for {payload.team_id}",
         "car": car,
     }
+
+
+@app.post("/api/admin/delete-team")
+async def delete_team(
+    payload: DeleteTeamPayload,
+    user: TokenPayload = Depends(require_admin),
+):
+    global window_open, window_expires_at, window_timer_task
+
+    if payload.team_id not in cars:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found on grid")
+
+    try:
+        deleted = database.database.delete_team(payload.team_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not delete team: {exc}")
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found in database")
+
+    cars.pop(payload.team_id, None)
+    if not cars and window_timer_task and not window_timer_task.done():
+        window_timer_task.cancel()
+        window_open = False
+        window_expires_at = None
+
+    event_payload = {
+        "team_id": payload.team_id,
+        "current_block": current_block,
+        "current_lap": current_lap,
+        "track_state": track_state,
+        "window_open": window_open,
+        "window_expires_at": window_expires_at,
+        "standings": engine.build_standings(cars),
+        "cars": {key: value.model_dump() for key, value in cars.items()},
+    }
+    await broadcast_race("TEAM_DELETED", event_payload)
+    await broadcast_all_team_feeds("TEAM_DELETED", event_payload)
+    return {"status": "ok", "message": f"Team {payload.team_id} deleted", **event_payload}
+
+
+@app.post("/api/admin/reset-database")
+async def reset_database(user: TokenPayload = Depends(require_admin)):
+    global cars, current_block, current_lap, track_state, window_open, window_expires_at, window_timer_task, is_executing_block
+
+    if window_timer_task and not window_timer_task.done():
+        window_timer_task.cancel()
+
+    try:
+        database.database.clear_database()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not reset database: {exc}")
+
+    cars = {}
+    current_block = 1
+    current_lap = 0
+    track_state = TrackState.DRY
+    window_open = False
+    window_expires_at = None
+    is_executing_block = False
+    event_payload = {
+        "message": "Database cleared by race administrator.",
+        "current_block": current_block,
+        "current_lap": current_lap,
+        "track_state": track_state,
+        "window_open": window_open,
+        "window_expires_at": window_expires_at,
+        "standings": [],
+        "cars": {},
+    }
+    await broadcast_race("DATABASE_RESET", event_payload)
+    await broadcast_all_team_feeds("DATABASE_RESET", event_payload)
+    return {"status": "ok", **event_payload}
 
 
 @app.post("/api/admin/start-window")

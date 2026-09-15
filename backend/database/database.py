@@ -538,4 +538,63 @@ def get_or_create_team(team_id_str: str, driver_name: str = "") -> int:
         conn.close()
 
 
+def delete_team(team_name: str) -> bool:
+    """Delete a team and all records that reference it."""
+    conn = get_connection()
+    placeholder = "%s" if is_postgres() else "?"
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT id FROM teams WHERE name = {placeholder}", (team_name,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("SELECT id, name FROM teams")
+            normalized_name = str(team_name).lower().replace(" ", "_")
+            for candidate in cursor.fetchall():
+                candidate_name = candidate[1] if isinstance(candidate, (tuple, list)) else candidate["name"]
+                if str(candidate_name).lower().replace(" ", "_") == normalized_name:
+                    row = candidate
+                    break
+        if not row:
+            return False
+
+        team_id = row[0] if isinstance(row, (tuple, list)) else row["id"]
+        for table in ("strategy_submissions", "team_powers", "lap_results", "team_members", "team_cars", "users"):
+            cursor.execute(f"DELETE FROM {table} WHERE team_id = {placeholder}", (team_id,))
+        cursor.execute(f"DELETE FROM teams WHERE id = {placeholder}", (team_id,))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def clear_database() -> None:
+    """Remove all application data while preserving the database schema."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        for table in (
+            "strategy_submissions",
+            "team_powers",
+            "lap_results",
+            "team_members",
+            "team_cars",
+            "users",
+            "laps",
+            "blocks",
+            "races",
+            "teams",
+            "superpowers",
+        ):
+            cursor.execute(f"DELETE FROM {table}")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 
