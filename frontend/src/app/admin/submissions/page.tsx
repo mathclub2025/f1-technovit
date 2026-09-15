@@ -7,7 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Users, Edit3, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { Users, Edit3, Send, CheckCircle2, AlertCircle, Database, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useRaceStore } from "@/lib/race-store";
 import { getApiUrl } from "@/lib/api-config";
 import { toast } from "sonner";
@@ -21,6 +32,9 @@ export default function SubmissionsPage() {
   const [overridePitLap, setOverridePitLap] = useState<string>("");
   const [overrideCompound, setOverrideCompound] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const openEditModal = (car: any) => {
     setEditingCar(car);
@@ -92,6 +106,51 @@ export default function SubmissionsPage() {
     }
   };
 
+  const handleDeleteTeam = async () => {
+    if (!teamToDelete) return;
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem("race_token");
+      const res = await fetch(getApiUrl("/api/admin/delete-team"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team_id: teamToDelete.team_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to delete team.");
+      useRaceStore.setState((state) => {
+        const cars = { ...state.cars };
+        delete cars[teamToDelete.team_id];
+        return { cars, standings: state.standings.filter((row) => row.team_id !== teamToDelete.team_id) };
+      });
+      toast.success("Team deleted", { description: `${teamToDelete.driver} was removed from the database.` });
+      setTeamToDelete(null);
+    } catch (err) {
+      toast.error("Delete failed", { description: err instanceof Error ? err.message : "Could not delete team." });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    setIsResetting(true);
+    try {
+      const token = localStorage.getItem("race_token");
+      const res = await fetch(getApiUrl("/api/admin/reset-database"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to clear database.");
+      useRaceStore.setState({ cars: {}, standings: [], currentBlock: 1, currentLap: 0, windowOpen: false, windowExpiresAt: null });
+      toast.success("Database cleared", { description: "All teams, race data, and submissions were deleted." });
+    } catch (err) {
+      toast.error("Reset failed", { description: err instanceof Error ? err.message : "Could not clear database." });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 min-h-full pb-8">
       <PageHeader
@@ -99,9 +158,30 @@ export default function SubmissionsPage() {
         title="Team Submissions & Radio Intercepts"
         description="Monitor locked strategies, execute verbal radio intercepts, and force unsubmitted teams."
         actions={
-          <Button variant="outline" size="sm" onClick={handleForceSubmitAll} className="gap-1.5">
-            <Send className="h-4 w-4 text-amber-500" /> Force Submit All Pending
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={handleForceSubmitAll} className="gap-1.5">
+              <Send className="h-4 w-4 text-amber-500" /> Force Submit All Pending
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="destructive" size="sm" className="gap-1.5" />}>
+                <Database className="h-4 w-4" /> Clear Database
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear the entire database?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently deletes every team, member, submission, power, and race result. The database schema stays in place, but this cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleResetDatabase} disabled={isResetting}>
+                    {isResetting ? "Clearing..." : "Clear Everything"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         }
       />
 
@@ -161,6 +241,15 @@ export default function SubmissionsPage() {
                             Force
                           </Button>
                         )}
+                        <Button
+                          size="icon-sm"
+                          variant="destructive"
+                          title={`Delete ${car.driver}`}
+                          aria-label={`Delete ${car.driver}`}
+                          onClick={() => setTeamToDelete(car)}
+                        >
+                          <Trash2 />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -256,6 +345,23 @@ export default function SubmissionsPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      <AlertDialog open={Boolean(teamToDelete)} onOpenChange={(open) => !open && setTeamToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {teamToDelete?.driver}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the team, its members, strategies, powers, and race results from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDeleteTeam} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete Team"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
